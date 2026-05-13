@@ -1,6 +1,6 @@
 # Learning Technique Recommender
 
-A web application that recommends the most effective study techniques for any course, given just the raw syllabus. Built with scikit-learn for the classification layer, Streamlit + Plotly for the interactive UI, and backed by a statistical analysis of historical student grade data.
+A web application that recommends the most effective study techniques for any course, given just the raw syllabus. **Every recommendation is grounded in a peer-reviewed meta-analysis or seminal study** — there is no synthetic data anywhere in the pipeline.
 
 > **Stack:** Python · scikit-learn · pandas · Streamlit · Plotly
 
@@ -11,10 +11,53 @@ A web application that recommends the most effective study techniques for any co
 Paste a course syllabus and the system:
 
 1. Classifies the syllabus into one of five course types using TF-IDF + cosine similarity
-2. Looks up which learning techniques produced the highest grades for that course type in historical data
-3. Returns a ranked list of recommended techniques with a combined score that blends course-type match and historical effectiveness
+2. Looks up which study techniques are most supported for that course type, using a research-grounded evidence base spanning 21 techniques and 22 meta-analyses / seminal studies
+3. Returns a ranked list of recommendations, with the citation, effect size, and 1-line explanation for each
 
-You can adjust the weighting in real time, browse the underlying effectiveness data, or upload your own CSV to retrain the recommender on your data.
+You can adjust the scoring weight in real time, browse the underlying evidence base, or upload your own grade CSV to retrain on your data.
+
+---
+
+## Methodology
+
+Rather than rely on synthetic grades, each (course type × technique) score is derived from published research:
+
+```
+evidence_score = evidence_weight × domain_alignment
+```
+
+- **`evidence_weight`** — a numeric weight derived from each technique's meta-analytic support
+  - `high` (1.00) — replicated meta-analyses, e.g. practice testing (Adesope, Trevisan, & Sundararajan 2017; *g* = 0.61, 272 studies)
+  - `moderate-high` (0.88) — strong but more bounded support, e.g. self-explanation (Bisra et al. 2018)
+  - `moderate` (0.75) — solid framework or single meta-analysis, e.g. simulation-based learning (Vogel et al. 2006)
+  - `mixed` (0.55) — meaningful but contested evidence, e.g. deliberate practice in education (Macnamara et al. 2014)
+  - `low` (0.40) — minimal or negative effects
+- **`domain_alignment`** — a percentage in `[0, 100]` capturing how well the technique's evidence extends to that course type's subfield (e.g. worked examples have strong alignment with calculation-driven learning but weak alignment with language learning)
+
+The recommender then computes a combined score:
+
+```
+combined = course_weight × course_match + (1 − course_weight) × (evidence_score / 100)
+```
+
+The sidebar slider exposes `course_weight` so users can experiment between "match the syllabus precisely" and "use the universally strongest technique."
+
+### Key research sources
+
+| Technique | Source | Effect |
+|---|---|---|
+| Active Recall | Adesope, Trevisan, & Sundararajan (2017) | Hedges' g = 0.61 (272 studies) |
+| Spaced Repetition | Cepeda et al. (2006) | Hedges' g = 0.42 (254 studies) |
+| Feynman / Self-Explanation | Bisra et al. (2018) | Hedges' g = 0.55 (64 studies) |
+| Conceptual Mapping | Nesbit & Adesope (2006) | Hedges' g = 0.43 (55 studies) |
+| Worked Examples | Renkl (2014); Sweller (1988) | Foundational |
+| Project-Based Learning | Chen & Yang (2019) | Hedges' g = 0.71 (46 studies) |
+| Comparative Analysis | Alfieri, Nokes-Malach, & Schunn (2013) | Hedges' g = 0.50 (57 studies) |
+| Scaffolded Skill Building | Belland et al. (2017) | Hedges' g = 0.46 (144 studies) |
+| Open-Ended Exploration | Alfieri et al. (2011) | Cohen's d = −0.08 (164 studies) |
+| Synthesis | Dunlosky et al. (2013) | *Psychological Science in the Public Interest* — landmark review of 10 study techniques |
+
+Full APA citations for all 22 sources are embedded in [`src/research.py`](src/research.py).
 
 ---
 
@@ -31,7 +74,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The app will open at `http://localhost:8501`.
+The app opens at `http://localhost:8501`.
 
 ---
 
@@ -39,9 +82,9 @@ The app will open at `http://localhost:8501`.
 
 1. Push this repo to GitHub
 2. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub
-3. Click **New app**, pick this repo, set the main file to `app.py`, and deploy
+3. **New app** → pick this repo → main file `app.py` → Deploy
 
-That's it — Streamlit Cloud reads `requirements.txt` and runs the app automatically.
+Streamlit Cloud reads `requirements.txt` and `.streamlit/config.toml` automatically.
 
 ---
 
@@ -51,45 +94,27 @@ That's it — Streamlit Cloud reads `requirements.txt` and runs the app automati
 Learning-Technique-Recommendations/
 ├── app.py                              Streamlit UI
 ├── requirements.txt
-├── .streamlit/config.toml              theme & server settings
+├── .streamlit/config.toml              theme + server settings
 ├── src/
-│   ├── classifier.py                   SyllabusClassifier — TF-IDF + cosine similarity
-│   ├── recommender.py                  LearningTechniqueRecommender — per-course-type ranking
-│   ├── pipeline.py                     LearningStyleSystem — end-to-end orchestration
-│   └── data.py                         default grades, example syllabi, CSV utilities
-└── Learning_Recommendation_Pipeline.ipynb   notebook walkthrough of the pipeline
+│   ├── research.py                     peer-reviewed evidence base (citations + effect sizes)
+│   ├── classifier.py                   SyllabusClassifier (TF-IDF + cosine similarity)
+│   ├── recommender.py                  LearningTechniqueRecommender (per-course-type ranking)
+│   ├── pipeline.py                     LearningStyleSystem (end-to-end orchestration)
+│   └── data.py                         default scores (derived from research.py), examples
+└── Learning_Recommendation_Pipeline.ipynb   notebook walkthrough
 ```
-
----
-
-## How the pipeline works
-
-### Stage 1 — Classification
-`SyllabusClassifier` vectorizes the syllabus with `TfidfVectorizer` (English stop words removed) and computes cosine similarity against five hand-crafted course-type descriptions. Output: a confidence score in `[0, 1]` for each course type.
-
-### Stage 2 — Recommendation
-`LearningTechniqueRecommender` is initialized with a `{course_type: {technique: avg_grade}}` dict computed from a historical dataset (5 course types × 24 techniques). For a given course type, it returns techniques ranked by average historical grade.
-
-### Stage 3 — Combined scoring
-`LearningStyleSystem` computes:
-
-```
-combined = course_weight × course_match + (1 − course_weight) × (expected_grade / 100)
-```
-
-The default `course_weight = 0.5` weights both signals equally. The sidebar slider in the UI lets you adjust this live.
 
 ---
 
 ## Course types supported
 
-| Course Type | Best Technique (default data) |
-|---|---|
-| Applied Calculation-Driven Learning | Worked Example Analysis |
-| Deep Conceptual Learning | Conceptual Mapping |
-| Case-Based & Strategic Learning | Case Study Analysis |
-| Language & Communication-Based Learning | Immersive Practice |
-| Hands-On, Project-Based Learning | Incremental Skill Building |
+| Course Type | Best Technique (research-grounded) | Primary Source |
+|---|---|---|
+| Applied Calculation-Driven Learning | Worked Example Analysis | Renkl (2014); Sweller (1988) |
+| Deep Conceptual Learning | Feynman Technique (Self-Explanation) | Bisra et al. (2018) |
+| Case-Based & Strategic Learning | Case Study Analysis | Williams (2005) |
+| Language & Communication-Based Learning | Immersive Practice | Krashen (1982) |
+| Hands-On, Project-Based Learning | Incremental Skill Building | Belland et al. (2017) |
 
 ---
 
@@ -101,7 +126,7 @@ Upload a CSV from the sidebar with these columns:
 - `Learning Technique`
 - `Grade of Module (%)`
 
-The recommender will recompute average grades per (course type, technique) pair and use those for ranking.
+The recommender will recompute average grades per (course type, technique) pair and use those for ranking, bypassing the default evidence-based scores.
 
 ---
 

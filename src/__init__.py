@@ -9,6 +9,12 @@ from src.data import (
 )
 from src.pipeline import LearningStyleSystem
 from src.recommender import LearningTechniqueRecommender
+from src.research import (
+    RESEARCH,
+    TechniqueEvidence,
+    compute_evidence_scores,
+    get_evidence,
+)
 
 __all__ = [
     "SyllabusClassifier",
@@ -18,4 +24,8 @@ __all__ = [
     "EXAMPLE_SYLLABI",
     "REQUIRED_COLUMNS",
     "compute_technique_grades",
+    "RESEARCH",
+    "TechniqueEvidence",
+    "compute_evidence_scores",
+    "get_evidence",
 ]

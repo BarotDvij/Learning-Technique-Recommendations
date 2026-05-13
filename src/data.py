@@ -1,54 +1,20 @@
-"""Default data, example syllabi, and shared data utilities."""
+"""Default data, example syllabi, and shared data utilities.
+
+The default per-course-type technique scores are derived from the peer-reviewed
+evidence base in :mod:`src.research` rather than synthetic grade data. See that
+module's docstring for the methodology and citations.
+"""
 
 from typing import Dict
 
 import pandas as pd
 
+from src.research import compute_evidence_scores
+
 REQUIRED_COLUMNS = ["Course Type", "Learning Technique", "Grade of Module (%)"]
 
 
-DEFAULT_TECHNIQUE_GRADES: Dict[str, Dict[str, float]] = {
-    "Applied Calculation-Driven Learning": {
-        "Worked Example Analysis": 93.45,
-        "Simulation & Visualization": 93.06,
-        "Deliberate Practice": 91.63,
-        "Reverse Engineering": 90.80,
-        "Iterative Writing & Editing": 63.45,
-        "Case Study Analysis": 61.15,
-    },
-    "Deep Conceptual Learning": {
-        "Conceptual Mapping": 93.25,
-        "Spaced Repetition": 92.46,
-        "Feynman Technique": 92.42,
-        "Active Recall": 92.33,
-        "Project-Based Learning": 62.93,
-        "Open-Ended Exploration": 60.41,
-    },
-    "Case-Based & Strategic Learning": {
-        "Case Study Analysis": 93.97,
-        "Experiential Learning": 92.98,
-        "Comparative Analysis": 92.60,
-        "First-Principles Thinking": 92.50,
-        "Simulation & Visualization": 63.42,
-        "Spaced Repetition": 60.42,
-    },
-    "Language & Communication-Based Learning": {
-        "Immersive Practice": 93.14,
-        "Iterative Writing & Editing": 92.70,
-        "Storytelling Frameworks": 92.27,
-        "Active Recall & Shadowing": 92.03,
-        "Worked Example Analysis": 63.76,
-        "Deliberate Practice": 61.82,
-    },
-    "Hands-On, Project-Based Learning": {
-        "Incremental Skill Building": 93.67,
-        "Project-Based Learning": 92.23,
-        "Learn-By-Building": 91.65,
-        "Work-Along & Solving": 91.50,
-        "Spaced Repetition": 64.94,
-        "Conceptual Mapping": 64.78,
-    },
-}
+DEFAULT_TECHNIQUE_GRADES: Dict[str, Dict[str, float]] = compute_evidence_scores()
 
 
 EXAMPLE_SYLLABI: Dict[str, str] = {
