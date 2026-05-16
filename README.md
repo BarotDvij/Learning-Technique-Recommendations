@@ -137,8 +137,9 @@ Learning-Technique-Recommendations/
 │   ├── plan.py                              StudyPlan + per-technique session templates
 │   ├── quiz.py                              Per-technique AI quiz generation
 │   ├── grade.py                             AI semantic grading of free-text answers
+│   ├── analytics.py                         PracticeLog — practice tracking + weak-topic detection
 │   └── data.py                              default scores (derived from research.py), examples
-├── tests/                                   19 unit + integration tests (pytest)
+├── tests/                                   27 unit + integration tests (pytest)
 └── Learning_Recommendation_Pipeline.ipynb   notebook walkthrough
 ```
 
@@ -168,6 +169,14 @@ The **Study Plan** tab turns a recommended technique into a concrete schedule:
 - **Exports** — download as Markdown, ICS (drop into Google Calendar / Apple Calendar / Outlook), or raw JSON.
 
 **Architecture principle.** The LLM is used only for the parts that can't be precomputed: topic extraction, quiz generation, and (when needed) vision-based PDF parsing. Session scheduling, technique templates, scoring, and exports are all deterministic code — no token use, no rate limits, no surprises.
+
+### Practice Analytics
+
+Every graded quiz answer is logged into a per-session `PracticeLog` so the **Progress** tab can show how you're trending and exactly what to re-study next. Analytics are pure-stdlib — no LLM calls, no network — so the dashboard works fully offline.
+
+- **Summary + score trend** — total questions attempted, accuracy %, average score, topics seen, and a Plotly line chart of the last-5 running average so improvement is visible at a glance.
+- **Weak-topic detection** — topics with ≥ 2 attempts and an average score ≤ 3.0 are surfaced as cards with a suggested action; topics with too few attempts are hidden until there's enough signal.
+- **Recommended next study session** — combines weak-topic scores with recency to suggest the top 1-3 review targets, each with a model technique and a short rationale. The whole log can be exported to JSON from the same tab.
 
 ### Enabling LLM topic extraction (optional)
 

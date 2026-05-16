@@ -1,5 +1,6 @@
 """Learning Technique Recommender — core package."""
 
+from src.analytics import PracticeLog, PracticeRecord
 from src.classifier import SyllabusClassifier
 from src.data import (
     DEFAULT_TECHNIQUE_GRADES,
@@ -42,4 +43,6 @@ __all__ = [
     "generate_quiz",
     "Grade",
     "grade_answer",
+    "PracticeLog",
+    "PracticeRecord",
 ]
