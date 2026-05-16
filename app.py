@@ -32,6 +32,7 @@ from src import (
     generate_study_plan,
     grade_answer,
 )
+from src.exports.anki import study_plan_to_anki
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Page configuration
@@ -709,11 +710,12 @@ def render_study_plan_tab() -> None:
     st.divider()
 
     st.markdown("#### Export")
-    dcols = st.columns(3)
+    dcols = st.columns(4)
     md_bytes = plan.to_markdown().encode("utf-8")
     json_bytes = pd.Series(plan.to_dict()).to_json(indent=2).encode("utf-8")
     start = date.today() + timedelta(days=1)
     ics_bytes = plan.to_ics(start_date=start).encode("utf-8")
+    apkg_bytes = study_plan_to_anki(plan)
     safe_name = "".join(c if c.isalnum() else "_" for c in plan.course_title).strip("_") or "study_plan"
 
     dcols[0].download_button(
@@ -736,6 +738,13 @@ def render_study_plan_tab() -> None:
         data=json_bytes,
         file_name=f"{safe_name}_plan.json",
         mime="application/json",
+        use_container_width=True,
+    )
+    dcols[3].download_button(
+        "Download Anki deck (.apkg)",
+        data=apkg_bytes,
+        file_name=f"{safe_name}_plan.apkg",
+        mime="application/octet-stream",
         use_container_width=True,
     )
 
