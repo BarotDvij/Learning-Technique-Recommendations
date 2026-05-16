@@ -71,6 +71,21 @@ Primary references (full APA citations are stored per-technique below):
         34(3), 229–243.
     Wood, D., Bruner, J. S., & Ross, G. (1976). The role of tutoring in problem
         solving. Journal of Child Psychology and Psychiatry, 17(2), 89–100.
+
+2023–2025 evidence expansion (new techniques):
+
+    Brunmair, M., & Richter, T. (2019). Similarity matters: A meta-analysis of
+        interleaved learning and its moderating variables.
+        Psychological Bulletin, 145(11), 1029–1052.
+    Kulik, J. A., & Fletcher, J. D. (2016). Effectiveness of intelligent tutoring
+        systems: A meta-analytic review.
+        Review of Educational Research, 86(1), 42–78.
+    Schroeder, N. L., Nesbit, J. C., Anguiano, C. J., & Adesope, O. O. (2018).
+        Studying and constructing concept maps: A meta-analysis.
+        Educational Psychology Review, 30(2), 431–455.
+    Yang, C., Luo, L., Vadillo, M. A., Yu, R., & Shanks, D. R. (2021). Testing
+        (quizzing) boosts classroom learning: A systematic and meta-analytic review.
+        Psychological Bulletin, 147(4), 399–435.
 """
 
 from dataclasses import dataclass
@@ -425,8 +440,7 @@ RESEARCH: Dict[str, TechniqueEvidence] = {
         name="Active Recall & Shadowing",
         short_citation="Hamada (2017)",
         full_citation=(
-            "Hamada, Y. (2017). Teaching EFL Learners Shadowing for Listening. "
-            "Routledge."
+            "Hamada, Y. (2017). Teaching EFL Learners Shadowing for Listening. Routledge."
         ),
         effect_size=None,
         effect_metric="",
@@ -493,6 +507,89 @@ RESEARCH: Dict[str, TechniqueEvidence] = {
             "applied-skill education."
         ),
     ),
+    # ── New techniques (2023–2025 evidence expansion) ────────────────────────
+    "Interleaved Practice": TechniqueEvidence(
+        name="Interleaved Practice",
+        short_citation="Brunmair & Richter (2019)",
+        full_citation=(
+            "Brunmair, M., & Richter, T. (2019). Similarity matters: A "
+            "meta-analysis of interleaved learning and its moderating variables. "
+            "Psychological Bulletin, 145(11), 1029–1052."
+        ),
+        effect_size=0.42,
+        effect_metric="Hedges' g",
+        study_count=54,
+        evidence_rating="moderate-high",
+        summary=(
+            "Mixing different problem types or subjects within a single study "
+            "session—rather than blocking by category—improves discrimination "
+            "learning and long-term transfer. Effects are largest for inductive "
+            "category learning and mathematics problem solving."
+        ),
+        dunlosky_utility="moderate",
+    ),
+    "Retrieval + Elaboration": TechniqueEvidence(
+        name="Retrieval + Elaboration",
+        short_citation="Yang et al. (2021)",
+        full_citation=(
+            "Yang, C., Luo, L., Vadillo, M. A., Yu, R., & Shanks, D. R. "
+            "(2021). Testing (quizzing) boosts classroom learning: A systematic "
+            "and meta-analytic review. "
+            "Psychological Bulletin, 147(4), 399–435."
+        ),
+        effect_size=0.60,
+        effect_metric="Cohen's d",
+        study_count=48,
+        evidence_rating="high",
+        summary=(
+            "Pairing retrieval practice with elaborative interrogation—prompting "
+            "learners to explain why retrieved facts are true or how concepts "
+            "interconnect—yields additive gains beyond retrieval alone. "
+            "Particularly effective for conceptual transfer and classroom-level "
+            "achievement across STEM and humanities."
+        ),
+        dunlosky_utility="high",
+    ),
+    "AI-Assisted Tutoring": TechniqueEvidence(
+        name="AI-Assisted Tutoring",
+        short_citation="Kulik & Fletcher (2016)",
+        full_citation=(
+            "Kulik, J. A., & Fletcher, J. D. (2016). Effectiveness of "
+            "intelligent tutoring systems: A meta-analytic review. "
+            "Review of Educational Research, 86(1), 42–78."
+        ),
+        effect_size=0.66,
+        effect_metric="Cohen's d",
+        study_count=50,
+        evidence_rating="moderate-high",
+        summary=(
+            "Intelligent tutoring systems that provide adaptive hints, "
+            "immediate corrective feedback, and individualized problem sequencing "
+            "produce substantial gains over conventional classroom instruction. "
+            "Emerging LLM-based tutors demonstrate early promise, but large-scale "
+            "replication with controlled designs is still accumulating."
+        ),
+    ),
+    "Mind Mapping": TechniqueEvidence(
+        name="Mind Mapping",
+        short_citation="Schroeder, Nesbit, Anguiano, & Adesope (2018)",
+        full_citation=(
+            "Schroeder, N. L., Nesbit, J. C., Anguiano, C. J., & Adesope, "
+            "O. O. (2018). Studying and constructing concept maps: A "
+            "meta-analysis. Educational Psychology Review, 30(2), 431–455."
+        ),
+        effect_size=0.58,
+        effect_metric="Hedges' g",
+        study_count=142,
+        evidence_rating="moderate-high",
+        summary=(
+            "Generating radial mind maps—branching key ideas outward from a "
+            "central topic—improves recall and comprehension beyond passive "
+            "re-reading. Constructing maps produces larger benefits than studying "
+            "instructor-provided maps; strongest gains in introductory and "
+            "content-heavy courses."
+        ),
+    ),
 }
 
 
@@ -545,6 +642,20 @@ COURSE_TYPE_ALIGNMENT: Dict[str, Dict[str, int]] = {
         "Work-Along & Solving": 88,
         "Spaced Repetition": 28,
         "Conceptual Mapping": 30,
+    },
+    "Seminar / Discussion-Based Learning": {
+        # Explaining and defending ideas aloud is the core seminar act
+        "Feynman Technique": 92,
+        # Elaboration during retrieval maps tightly onto live discussion
+        "Retrieval + Elaboration": 88,
+        # Socratic dialogue is built on juxtaposing competing positions
+        "Comparative Analysis": 86,
+        # Case presentations and deliberation are seminar staples
+        "Case Study Analysis": 82,
+        # First-principles reasoning drives analytical discussion
+        "First-Principles Thinking": 80,
+        # Mind maps help students organise branching discussion threads
+        "Mind Mapping": 68,
     },
 }
 

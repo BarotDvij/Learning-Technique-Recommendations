@@ -53,6 +53,15 @@ EXAMPLE_SYLLABI: Dict[str, str] = {
         "deliverables.\n"
         "Assessment: Projects (60%), Labs (20%), Participation (20%)"
     ),
+    "Political Theory Seminar": (
+        "POLS 450: Political Theory Seminar\n"
+        "Discussion-intensive seminar on classical and contemporary political thought. "
+        "Students read primary texts (Plato, Hobbes, Rawls, Arendt), present position "
+        "papers, and engage in structured Socratic debate. Emphasis on argumentation, "
+        "comparative textual analysis, and defending first-principles reasoning.\n"
+        "Assessment: Weekly response papers (30%), Seminar leadership (20%), "
+        "Comparative essay (30%), Final oral defence (20%)"
+    ),
 }
 
 
@@ -64,10 +73,7 @@ def compute_technique_grades(data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
 
     return {
         course_type: (
-            group.groupby("Learning Technique")["Grade of Module (%)"]
-            .mean()
-            .round(2)
-            .to_dict()
+            group.groupby("Learning Technique")["Grade of Module (%)"].mean().round(2).to_dict()
         )
         for course_type, group in data.groupby("Course Type")
     }
