@@ -8,6 +8,7 @@ Run locally with:
 from __future__ import annotations
 
 import io
+import json
 from datetime import date, timedelta
 
 import pandas as pd
@@ -21,8 +22,11 @@ from src import (
     LearningStyleSystem,
     REQUIRED_COLUMNS,
     RESEARCH,
+    Quiz,
     StudyPlan,
     compute_technique_grades,
+    extract_syllabus,
+    generate_quiz,
     generate_study_plan,
 )
 
@@ -382,8 +386,111 @@ def render_plan_overview(plan: StudyPlan) -> None:
             st.caption(" · ".join(plan.notes))
 
 
+def _session_key(s) -> str:
+    """Stable identifier for a single session within session_state."""
+    return f"w{s.week}-s{s.session_in_week}-{s.technique}"
+
+
+def render_quiz(quiz: Quiz, key_prefix: str = "") -> None:
+    """Display a quiz as an expandable list of question → reveal-answer cards."""
+    source_pill = (
+        '<span class="badge badge-high">AI-generated</span>'
+        if quiz.source == "llm"
+        else '<span class="badge badge-mixed">offline template</span>'
+    )
+    st.markdown(
+        f"<div style='margin: 0.5rem 0;'>{source_pill} "
+        f"<span class='pill'>{len(quiz.questions)} questions</span> "
+        f"<span class='pill'>{quiz.technique}</span></div>",
+        unsafe_allow_html=True,
+    )
+    for note in quiz.notes:
+        st.caption(note)
+
+    for i, q in enumerate(quiz.questions, start=1):
+        diff_cls = {
+            "easy": "badge badge-high",
+            "medium": "badge badge-moderate-high",
+            "hard": "badge badge-mixed",
+        }.get(q.difficulty.lower(), "badge badge-moderate")
+
+        with st.expander(f"Q{i}. {q.question}", expanded=False):
+            st.markdown(
+                f"<div style='margin-bottom: 0.6rem;'>"
+                f"<span class='{diff_cls}'>{q.difficulty}</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(f"**Answer:** {q.answer}")
+            if q.explanation:
+                st.caption(q.explanation)
+
+    safe_topic = "".join(c if c.isalnum() else "_" for c in quiz.topic.lower())[:40] or "quiz"
+    dl_cols = st.columns([1, 1, 4])
+    with dl_cols[0]:
+        st.download_button(
+            "Download Markdown",
+            data=quiz.to_markdown(),
+            file_name=f"quiz_{safe_topic}.md",
+            mime="text/markdown",
+            key=f"{key_prefix}-md",
+            use_container_width=True,
+        )
+    with dl_cols[1]:
+        st.download_button(
+            "Download JSON",
+            data=json.dumps(quiz.to_dict(), indent=2),
+            file_name=f"quiz_{safe_topic}.json",
+            mime="application/json",
+            key=f"{key_prefix}-json",
+            use_container_width=True,
+        )
+
+
 def render_plan_sessions(plan: StudyPlan) -> None:
-    """Render the plan as styled week-by-week session cards."""
+    """Render the plan as week-by-week session cards with per-session quiz buttons."""
+    api_key = _get_gemini_key()
+    quizzes: dict = st.session_state.setdefault("quizzes", {})
+
+    non_review_sessions = [s for s in plan.sessions if not s.is_review]
+    syllabus_text = st.session_state.get("last_syllabus", "")
+
+    master_cols = st.columns([1.4, 1, 3])
+    with master_cols[0]:
+        if st.button(
+            f"Generate quizzes for all {len(non_review_sessions)} sessions",
+            type="secondary",
+            use_container_width=True,
+            disabled=not non_review_sessions,
+            key="gen-all-quizzes",
+        ):
+            progress = st.progress(0.0, text="Generating quizzes...")
+            total = max(1, len(non_review_sessions))
+            for idx, s in enumerate(non_review_sessions, start=1):
+                sid = _session_key(s)
+                if sid in quizzes:
+                    progress.progress(idx / total, text=f"Skipping existing quiz {idx}/{total}")
+                    continue
+                quizzes[sid] = generate_quiz(
+                    topic=s.topic,
+                    technique=s.technique,
+                    syllabus_text=syllabus_text,
+                    n_questions=5,
+                    api_key=api_key,
+                )
+                progress.progress(idx / total, text=f"Generated {idx}/{total}")
+            progress.empty()
+            st.success(f"Generated quizzes for {len(non_review_sessions)} sessions.")
+
+    with master_cols[1]:
+        if st.button(
+            "Clear all quizzes",
+            use_container_width=True,
+            disabled=not quizzes,
+            key="clear-all-quizzes",
+        ):
+            quizzes.clear()
+            st.rerun()
+
     for week in range(1, plan.weeks + 1):
         week_sessions = plan.sessions_in_week(week)
         if not week_sessions:
@@ -395,25 +502,55 @@ def render_plan_sessions(plan: StudyPlan) -> None:
             actions_html = "".join(f"<li>{a}</li>" for a in s.actions)
             st.markdown(
                 f"""
-                <div class="tech-card" style="margin-bottom: 0.6rem;">
-                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="flex: 1;">
-                      <div class="tech-rank">Session {s.session_in_week}</div>
-                      <div class="tech-name">{s.topic}</div>
-                      <div class="tech-meta">
-                        <span class="{badge_cls}">{badge_label}</span>
-                        <span class="pill">{s.technique}</span>
-                        <span class="pill">{s.duration_minutes} min</span>
-                      </div>
-                      <ul style="margin-top: 0.7rem; padding-left: 1.25rem; color: #374151; font-size: 0.92rem;">
-                        {actions_html}
-                      </ul>
+                <div class="tech-card" style="margin-bottom: 0.4rem;">
+                  <div style="flex: 1;">
+                    <div class="tech-rank">Session {s.session_in_week}</div>
+                    <div class="tech-name">{s.topic}</div>
+                    <div class="tech-meta">
+                      <span class="{badge_cls}">{badge_label}</span>
+                      <span class="pill">{s.technique}</span>
+                      <span class="pill">{s.duration_minutes} min</span>
                     </div>
+                    <ul style="margin-top: 0.7rem; padding-left: 1.25rem; color: #374151; font-size: 0.92rem;">
+                      {actions_html}
+                    </ul>
                   </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+
+            session_id = _session_key(s)
+            if s.is_review:
+                continue
+
+            btn_cols = st.columns([1, 1, 4])
+            existing = quizzes.get(session_id)
+            label = "Regenerate quiz" if existing else "Generate practice quiz"
+            with btn_cols[0]:
+                if st.button(label, key=f"gen-{session_id}", use_container_width=True):
+                    syllabus_text = st.session_state.get("last_syllabus", "")
+                    with st.spinner(f"Generating quiz for {s.topic}..."):
+                        quiz = generate_quiz(
+                            topic=s.topic,
+                            technique=s.technique,
+                            syllabus_text=syllabus_text,
+                            n_questions=5,
+                            api_key=api_key,
+                        )
+                    quizzes[session_id] = quiz
+                    existing = quiz
+            if existing is not None:
+                with btn_cols[1]:
+                    if st.button("Clear quiz", key=f"clear-{session_id}", use_container_width=True):
+                        quizzes.pop(session_id, None)
+                        existing = None
+                        st.rerun()
+
+            if existing is not None:
+                render_quiz(existing, key_prefix=f"q-{session_id}")
+
+            st.markdown("<div style='margin-bottom: 0.6rem;'></div>", unsafe_allow_html=True)
 
 
 def render_study_plan_tab() -> None:
@@ -481,6 +618,7 @@ def render_study_plan_tab() -> None:
                 api_key=api_key,
             )
         st.session_state["last_plan"] = plan
+        st.session_state["quizzes"] = {}
         st.success(f"Generated {plan.total_sessions} sessions over {plan.weeks} weeks.")
 
     plan: StudyPlan | None = st.session_state.get("last_plan")
@@ -551,9 +689,47 @@ def main() -> None:
 
         with col_left:
             st.markdown("#### Syllabus")
+
+            with st.expander("Or upload a syllabus file (PDF, TXT, MD)", expanded=False):
+                uploaded_syllabus = st.file_uploader(
+                    "Drop a course syllabus",
+                    type=["pdf", "txt", "md", "markdown"],
+                    accept_multiple_files=False,
+                    label_visibility="collapsed",
+                    key="syllabus_upload",
+                )
+                if uploaded_syllabus is not None:
+                    if (
+                        st.session_state.get("uploaded_filename")
+                        != uploaded_syllabus.name
+                    ):
+                        with st.spinner(f"Extracting text from {uploaded_syllabus.name}..."):
+                            extracted = extract_syllabus(
+                                file_bytes=uploaded_syllabus.getvalue(),
+                                filename=uploaded_syllabus.name,
+                                api_key=_get_gemini_key(),
+                            )
+                        st.session_state["uploaded_filename"] = uploaded_syllabus.name
+                        st.session_state["uploaded_text"] = extracted.text
+                        st.session_state["uploaded_meta"] = extracted
+
+                if st.session_state.get("uploaded_text"):
+                    meta = st.session_state.get("uploaded_meta")
+                    if meta is not None:
+                        badge = "Gemini vision" if meta.used_llm else "native"
+                        st.caption(
+                            f"Extracted **{meta.char_count:,}** characters from "
+                            f"`{meta.filename}` ({meta.source} · {badge})"
+                        )
+                        for w in meta.warnings:
+                            st.caption(f"_{w}_")
+
+            default_value = (
+                st.session_state.get("uploaded_text") or default_text
+            )
             syllabus = st.text_area(
                 "Syllabus text",
-                value=default_text,
+                value=default_value,
                 height=320,
                 label_visibility="collapsed",
                 key="syllabus_input",
@@ -618,15 +794,26 @@ def main() -> None:
         st.markdown("""
 #### How it works
 
-The pipeline has three stages:
+The pipeline has five stages — three deterministic, two LLM-assisted:
 
-1. **Syllabus classifier** — A TF-IDF vectorizer + cosine similarity scores the syllabus
+1. **Syllabus ingestion** — Paste text or drop a PDF/TXT/Markdown file. Text-based PDFs
+   are parsed natively via `pypdf`; scanned or image-based PDFs fall back to Gemini 2.5
+   Flash multimodal vision when an API key is configured.
+2. **Syllabus classifier** — A TF-IDF vectorizer + cosine similarity scores the syllabus
    against five hand-crafted course-type descriptions. Output: a confidence score for each
    course type in the range [0, 1].
-2. **Technique recommender** — For each course type, an evidence score per technique is
+3. **Technique recommender** — For each course type, an evidence score per technique is
    pre-computed from peer-reviewed meta-analyses (see Methodology below). The system ranks
    techniques best-first.
-3. **Combined scoring** — For each (course type, technique) pair:
+4. **Study plan generation** — The top technique drives a session-by-session schedule.
+   Topics are extracted from the syllabus (Gemini if available, regex heuristic otherwise),
+   then deterministic per-technique templates produce the concrete actions for each session.
+5. **Practice quizzes** — Each non-review session can produce a 5-question quiz tuned to
+   its technique (Active Recall → recall prompts, Worked Examples → solve-and-explain,
+   Feynman → explain-it-simply, etc.). Generated via Gemini with a JSON schema, or
+   falls back to template prompts offline.
+
+The core scoring formula for ranking techniques:
 
    ```
    combined = course_weight × course_match + (1 − course_weight) × (evidence_score / 100)
@@ -634,6 +821,18 @@ The pipeline has three stages:
 
    The slider in the sidebar controls `course_weight`. At `1.0`, only course-type match
    matters; at `0.0`, only the strength of evidence for the technique matters.
+
+#### When the LLM is — and isn't — used
+
+The architecture deliberately keeps LLM calls in two narrow lanes:
+
+- **Topic extraction** from the syllabus (one call per plan generation)
+- **Quiz generation** for a specific session (one call per quiz)
+- **PDF vision fallback** (only triggered when native PDF parsing yields too little text)
+
+Everything else — classification, scoring, ranking, session scheduling, exports,
+evidence lookups — is deterministic code with no external dependencies. The app is
+fully usable offline; the LLM features simply unlock when an API key is provided.
 
 #### Methodology — how the evidence scores are derived
 

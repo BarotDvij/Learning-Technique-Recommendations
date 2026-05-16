@@ -7,8 +7,10 @@ from src.data import (
     REQUIRED_COLUMNS,
     compute_technique_grades,
 )
+from src.parsing import ExtractedSyllabus, extract_syllabus
 from src.pipeline import LearningStyleSystem
 from src.plan import StudyPlan, StudySession, generate_study_plan
+from src.quiz import Quiz, QuizQuestion, generate_quiz
 from src.recommender import LearningTechniqueRecommender
 from src.research import (
     RESEARCH,
@@ -32,4 +34,9 @@ __all__ = [
     "StudyPlan",
     "StudySession",
     "generate_study_plan",
+    "ExtractedSyllabus",
+    "extract_syllabus",
+    "Quiz",
+    "QuizQuestion",
+    "generate_quiz",
 ]
