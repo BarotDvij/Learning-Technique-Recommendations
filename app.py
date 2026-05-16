@@ -8,6 +8,7 @@ Run locally with:
 from __future__ import annotations
 
 import io
+from datetime import date, timedelta
 
 import pandas as pd
 import plotly.express as px
@@ -20,7 +21,9 @@ from src import (
     LearningStyleSystem,
     REQUIRED_COLUMNS,
     RESEARCH,
+    StudyPlan,
     compute_technique_grades,
+    generate_study_plan,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -352,6 +355,177 @@ def render_data_explorer(system: LearningStyleSystem) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Study plan tab
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _get_gemini_key() -> str | None:
+    """Pull a Gemini API key from Streamlit secrets if available."""
+    try:
+        return st.secrets.get("GEMINI_API_KEY")  # type: ignore[attr-defined]
+    except Exception:
+        return None
+
+
+def render_plan_overview(plan: StudyPlan) -> None:
+    """Top-of-tab summary metrics + topic list."""
+    cols = st.columns(4)
+    cols[0].metric("Weeks", plan.weeks)
+    cols[1].metric("Sessions", plan.total_sessions)
+    cols[2].metric("Total time", f"{plan.total_minutes // 60}h {plan.total_minutes % 60}m")
+    cols[3].metric("Topics", len(plan.topics))
+
+    with st.expander(f"Topics ({plan.topic_source})", expanded=False):
+        for t in plan.topics:
+            st.markdown(f"- {t}")
+        if plan.notes:
+            st.caption(" · ".join(plan.notes))
+
+
+def render_plan_sessions(plan: StudyPlan) -> None:
+    """Render the plan as styled week-by-week session cards."""
+    for week in range(1, plan.weeks + 1):
+        week_sessions = plan.sessions_in_week(week)
+        if not week_sessions:
+            continue
+        st.markdown(f"#### Week {week}")
+        for s in week_sessions:
+            badge_cls = "badge badge-mixed" if s.is_review else "badge badge-moderate-high"
+            badge_label = "review" if s.is_review else s.technique
+            actions_html = "".join(f"<li>{a}</li>" for a in s.actions)
+            st.markdown(
+                f"""
+                <div class="tech-card" style="margin-bottom: 0.6rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                      <div class="tech-rank">Session {s.session_in_week}</div>
+                      <div class="tech-name">{s.topic}</div>
+                      <div class="tech-meta">
+                        <span class="{badge_cls}">{badge_label}</span>
+                        <span class="pill">{s.technique}</span>
+                        <span class="pill">{s.duration_minutes} min</span>
+                      </div>
+                      <ul style="margin-top: 0.7rem; padding-left: 1.25rem; color: #374151; font-size: 0.92rem;">
+                        {actions_html}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_study_plan_tab() -> None:
+    last_analysis = st.session_state.get("last_analysis")
+    last_syllabus = st.session_state.get("last_syllabus", "")
+
+    if not last_analysis:
+        st.info(
+            "Analyze a syllabus first on the **Analyze** tab. "
+            "Once you have recommendations, come back here to build a schedule."
+        )
+        return
+
+    top_techniques = [t["technique"] for t in last_analysis["top_techniques"]]
+    top_course_type = last_analysis["course_type_scores"][0][0]
+    default_technique = top_techniques[0]
+
+    st.markdown("#### Plan parameters")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        course_title = st.text_input(
+            "Course title",
+            value=top_course_type.replace(" Learning", "").strip(),
+            help="Shown at the top of the generated plan and calendar.",
+        )
+    with col2:
+        weeks = st.slider("Weeks until exam / deadline", 1, 16, 4)
+    with col3:
+        hours_per_week = st.slider("Hours per week", 1.0, 20.0, 5.0, 0.5)
+
+    col4, col5 = st.columns([2, 1])
+    with col4:
+        primary_technique = st.selectbox(
+            "Primary technique",
+            options=top_techniques,
+            index=0,
+            help="Top recommendation from the Analyze tab. Override if you want.",
+        )
+    with col5:
+        add_review = st.toggle("Add weekly spaced review", value=True)
+
+    api_key = _get_gemini_key()
+    if api_key:
+        st.caption(
+            "**LLM topic extraction enabled** — Gemini Flash will read your syllabus "
+            "and extract topics. Falls back to heuristics if the call fails."
+        )
+    else:
+        st.caption(
+            "**Heuristic topic extraction** — add a `GEMINI_API_KEY` to "
+            "`.streamlit/secrets.toml` for LLM-extracted topics. The plan still "
+            "works without it."
+        )
+
+    if st.button("Generate study plan", type="primary", use_container_width=True):
+        with st.spinner("Building your plan..."):
+            plan = generate_study_plan(
+                course_title=course_title or top_course_type,
+                course_type=top_course_type,
+                primary_technique=primary_technique,
+                syllabus_text=last_syllabus,
+                weeks=weeks,
+                hours_per_week=hours_per_week,
+                add_spaced_review=add_review,
+                api_key=api_key,
+            )
+        st.session_state["last_plan"] = plan
+        st.success(f"Generated {plan.total_sessions} sessions over {plan.weeks} weeks.")
+
+    plan: StudyPlan | None = st.session_state.get("last_plan")
+    if plan is None:
+        return
+
+    st.divider()
+    render_plan_overview(plan)
+    st.divider()
+    render_plan_sessions(plan)
+    st.divider()
+
+    st.markdown("#### Export")
+    dcols = st.columns(3)
+    md_bytes = plan.to_markdown().encode("utf-8")
+    json_bytes = pd.Series(plan.to_dict()).to_json(indent=2).encode("utf-8")
+    start = date.today() + timedelta(days=1)
+    ics_bytes = plan.to_ics(start_date=start).encode("utf-8")
+    safe_name = "".join(c if c.isalnum() else "_" for c in plan.course_title).strip("_") or "study_plan"
+
+    dcols[0].download_button(
+        "Download Markdown",
+        data=md_bytes,
+        file_name=f"{safe_name}_plan.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+    dcols[1].download_button(
+        "Download Calendar (.ics)",
+        data=ics_bytes,
+        file_name=f"{safe_name}_plan.ics",
+        mime="text/calendar",
+        use_container_width=True,
+        help=f"Sessions scheduled daily starting {start.isoformat()}.",
+    )
+    dcols[2].download_button(
+        "Download JSON",
+        data=json_bytes,
+        file_name=f"{safe_name}_plan.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -367,7 +541,9 @@ def main() -> None:
 
     default_text = render_sidebar()
 
-    tab_analyze, tab_explore, tab_about = st.tabs(["Analyze", "Explore Data", "How It Works"])
+    tab_analyze, tab_plan, tab_explore, tab_about = st.tabs(
+        ["Analyze", "Study Plan", "Explore Data", "How It Works"]
+    )
 
     # ── Analyze tab ───────────────────────────────────────────────────────────
     with tab_analyze:
@@ -389,6 +565,9 @@ def main() -> None:
             with st.spinner("Analyzing..."):
                 results = system.analyze_syllabus(syllabus, top_n=5)
 
+            st.session_state["last_analysis"] = results
+            st.session_state["last_syllabus"] = syllabus
+
             top_ct, top_score = results["course_type_scores"][0]
             best = results["top_techniques"][0]
 
@@ -409,11 +588,21 @@ def main() -> None:
             with st.expander("Full breakdown — every technique across every course type"):
                 render_detailed_table(results["all_techniques"])
 
+            st.info(
+                "Open the **Study Plan** tab to turn these recommendations into a "
+                "concrete, session-by-session schedule.",
+                icon=":material/event_note:",
+            )
+
         elif analyze:
             st.warning("Please paste a syllabus before analyzing.")
         else:
             with col_right:
                 st.info("Pick or paste a syllabus on the left, then click **Analyze syllabus**.")
+
+    # ── Study Plan tab ────────────────────────────────────────────────────────
+    with tab_plan:
+        render_study_plan_tab()
 
     # ── Explore Data tab ──────────────────────────────────────────────────────
     with tab_explore:

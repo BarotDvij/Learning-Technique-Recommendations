@@ -13,6 +13,7 @@ Paste a course syllabus and the system:
 1. Classifies the syllabus into one of five course types using TF-IDF + cosine similarity
 2. Looks up which study techniques are most supported for that course type, using a research-grounded evidence base spanning 21 techniques and 22 meta-analyses / seminal studies
 3. Returns a ranked list of recommendations, with the citation, effect size, and 1-line explanation for each
+4. **Generates a concrete, session-by-session study plan** for the recommended technique — exportable as Markdown, ICS calendar, or JSON
 
 You can adjust the scoring weight in real time, browse the underlying evidence base, or upload your own grade CSV to retrain on your data.
 
@@ -94,12 +95,15 @@ Streamlit Cloud reads `requirements.txt` and `.streamlit/config.toml` automatica
 Learning-Technique-Recommendations/
 ├── app.py                              Streamlit UI
 ├── requirements.txt
-├── .streamlit/config.toml              theme + server settings
+├── .streamlit/
+│   ├── config.toml                     theme + server settings
+│   └── secrets.example.toml            template for GEMINI_API_KEY
 ├── src/
 │   ├── research.py                     peer-reviewed evidence base (citations + effect sizes)
 │   ├── classifier.py                   SyllabusClassifier (TF-IDF + cosine similarity)
 │   ├── recommender.py                  LearningTechniqueRecommender (per-course-type ranking)
 │   ├── pipeline.py                     LearningStyleSystem (end-to-end orchestration)
+│   ├── plan.py                         StudyPlan + per-technique session templates, LLM topic extraction
 │   └── data.py                         default scores (derived from research.py), examples
 └── Learning_Recommendation_Pipeline.ipynb   notebook walkthrough
 ```
@@ -115,6 +119,27 @@ Learning-Technique-Recommendations/
 | Case-Based & Strategic Learning | Case Study Analysis | Williams (2005) |
 | Language & Communication-Based Learning | Immersive Practice | Krashen (1982) |
 | Hands-On, Project-Based Learning | Incremental Skill Building | Belland et al. (2017) |
+
+---
+
+## Study plan generation
+
+The **Study Plan** tab turns a recommended technique into a concrete schedule:
+
+- **Topic extraction** — Gemini 2.5 Flash reads the syllabus and pulls out the main study topics. Falls back to regex-based heuristic parsing if no API key is configured, so the app works fully offline.
+- **Session templates** — each top-supported technique has its own deterministic template (Worked Example Analysis, Feynman, Conceptual Mapping, Case Study Analysis, Immersive Practice, Incremental Skill Building, Project-Based Learning, Active Recall, Spaced Repetition). Templates produce a session-by-session schedule with concrete sub-steps.
+- **Spaced review** — when the primary technique isn't already a review technique, short weekly Spaced Repetition consolidation sessions are added at the end of each week.
+- **Exports** — download as Markdown, ICS (drop into Google Calendar / Apple Calendar / Outlook), or raw JSON.
+
+**Architecture principle.** The LLM is used only for the topic-extraction step, which is the one piece that can't be precomputed. Session scheduling, technique templates, and exports are all deterministic code — no token use, no rate limits, no surprises.
+
+### Enabling LLM topic extraction (optional)
+
+1. Get a free API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (no credit card required).
+2. Copy `.streamlit/secrets.example.toml` to `.streamlit/secrets.toml` and paste your key.
+3. Restart the app. The Study Plan tab will display "LLM topic extraction enabled."
+
+Without a key, the app uses a heuristic parser. Plans are still useful, just with simpler topic names.
 
 ---
 

@@ -8,6 +8,7 @@ from src.data import (
     compute_technique_grades,
 )
 from src.pipeline import LearningStyleSystem
+from src.plan import StudyPlan, StudySession, generate_study_plan
 from src.recommender import LearningTechniqueRecommender
 from src.research import (
     RESEARCH,
@@ -28,4 +29,7 @@ __all__ = [
     "TechniqueEvidence",
     "compute_evidence_scores",
     "get_evidence",
+    "StudyPlan",
+    "StudySession",
+    "generate_study_plan",
 ]

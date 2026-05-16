@@ -7,3 +7,4 @@ venv/
 .DS_Store
 .ipynb_checkpoints/
 *.egg-info/
+.streamlit/secrets.toml
