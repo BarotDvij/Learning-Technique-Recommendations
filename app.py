@@ -19,6 +19,7 @@ import streamlit as st
 from src import (
     DEFAULT_TECHNIQUE_GRADES,
     EXAMPLE_SYLLABI,
+    Grade,
     LearningStyleSystem,
     REQUIRED_COLUMNS,
     RESEARCH,
@@ -28,6 +29,7 @@ from src import (
     extract_syllabus,
     generate_quiz,
     generate_study_plan,
+    grade_answer,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -407,6 +409,9 @@ def render_quiz(quiz: Quiz, key_prefix: str = "") -> None:
     for note in quiz.notes:
         st.caption(note)
 
+    grades: dict = st.session_state.setdefault("grades", {})
+    api_key = _get_gemini_key()
+
     for i, q in enumerate(quiz.questions, start=1):
         diff_cls = {
             "easy": "badge badge-high",
@@ -414,13 +419,75 @@ def render_quiz(quiz: Quiz, key_prefix: str = "") -> None:
             "hard": "badge badge-mixed",
         }.get(q.difficulty.lower(), "badge badge-moderate")
 
+        q_key = f"{key_prefix}-q{i}"
+
         with st.expander(f"Q{i}. {q.question}", expanded=False):
             st.markdown(
                 f"<div style='margin-bottom: 0.6rem;'>"
                 f"<span class='{diff_cls}'>{q.difficulty}</span></div>",
                 unsafe_allow_html=True,
             )
-            st.markdown(f"**Answer:** {q.answer}")
+
+            user_answer = st.text_area(
+                "Your answer",
+                key=f"{q_key}-input",
+                height=90,
+                placeholder="Write your answer, then check it against the model answer below.",
+            )
+
+            action_cols = st.columns([1, 1, 3])
+            with action_cols[0]:
+                if st.button(
+                    "Check my answer",
+                    key=f"{q_key}-check",
+                    disabled=not user_answer.strip(),
+                    use_container_width=True,
+                ):
+                    with st.spinner("Grading..."):
+                        grade = grade_answer(
+                            question=q.question,
+                            expected_answer=q.answer,
+                            user_answer=user_answer,
+                            technique=quiz.technique,
+                            api_key=api_key,
+                        )
+                    grades[q_key] = grade
+            with action_cols[1]:
+                if q_key in grades and st.button(
+                    "Clear grade",
+                    key=f"{q_key}-clear",
+                    use_container_width=True,
+                ):
+                    grades.pop(q_key, None)
+                    st.rerun()
+
+            grade: Grade | None = grades.get(q_key)
+            if grade is not None:
+                grade_cls = {
+                    5: "badge badge-high",
+                    4: "badge badge-high",
+                    3: "badge badge-moderate-high",
+                    2: "badge badge-moderate",
+                    1: "badge badge-mixed",
+                    0: "badge badge-mixed",
+                }.get(grade.score, "badge badge-moderate")
+                source_label = "AI" if grade.source == "llm" else "offline"
+                st.markdown(
+                    f"<div style='margin: 0.6rem 0;'>"
+                    f"<span class='{grade_cls}'>Score {grade.score}/5</span> "
+                    f"<span class='pill'>{'correct' if grade.is_correct else 'review'}</span> "
+                    f"<span class='pill'>{source_label} grading</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(f"_{grade.feedback}_")
+                if grade.missing_points:
+                    st.markdown("**Concepts to review:**")
+                    for mp in grade.missing_points:
+                        st.markdown(f"- {mp}")
+
+            st.markdown("---")
+            st.markdown(f"**Model answer:** {q.answer}")
             if q.explanation:
                 st.caption(q.explanation)
 
@@ -619,6 +686,7 @@ def render_study_plan_tab() -> None:
             )
         st.session_state["last_plan"] = plan
         st.session_state["quizzes"] = {}
+        st.session_state["grades"] = {}
         st.success(f"Generated {plan.total_sessions} sessions over {plan.weeks} weeks.")
 
     plan: StudyPlan | None = st.session_state.get("last_plan")

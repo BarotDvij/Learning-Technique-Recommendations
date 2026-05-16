@@ -1,0 +1,43 @@
+.git
+.github
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+LICENSE
+
+# Python build / cache artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Secrets — never bake into the image
+.streamlit/secrets.toml
+.env
+.env.*
+
+# Notebooks (image runs the app, not the notebook)
+*.ipynb
+.ipynb_checkpoints/
+
+# IDE / editor
+.vscode/
+.idea/
+.cursor/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+tests/
+htmlcov/
+.coverage
+coverage.xml

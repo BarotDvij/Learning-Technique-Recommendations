@@ -2,7 +2,12 @@
 
 A web application that recommends the most effective study techniques for any course, given just the raw syllabus. **Every recommendation is grounded in a peer-reviewed meta-analysis or seminal study** — there is no synthetic data anywhere in the pipeline.
 
-> **Stack:** Python · scikit-learn · pandas · Streamlit · Plotly
+[![tests](https://github.com/BarotDvij/Learning-Technique-Recommendations/actions/workflows/tests.yml/badge.svg)](https://github.com/BarotDvij/Learning-Technique-Recommendations/actions/workflows/tests.yml)
+[![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
+[![streamlit](https://img.shields.io/badge/built%20with-Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![evidence](https://img.shields.io/badge/evidence-22%20meta--analyses-success)](#methodology)
+
+> **Stack:** Python · scikit-learn · pandas · Streamlit · Plotly · Gemini 2.5 Flash
 
 ---
 
@@ -15,6 +20,7 @@ Upload your course syllabus (or paste it) and the system:
 3. **Recommends** study techniques most supported for that course type, using a research-grounded evidence base spanning 21 techniques and 22 meta-analyses / seminal studies — every recommendation cites its primary source and reports the effect size
 4. **Generates a concrete, session-by-session study plan** for the recommended technique — exportable as Markdown, ICS calendar, or JSON
 5. **Generates AI practice quizzes** tailored to each session's technique — Active Recall sessions get factual recall, Worked Example sessions get solve-and-explain, Feynman sessions get explain-it-simply prompts, etc.
+6. **Grades your free-text answers semantically** — type an answer to any quiz question, and Gemini scores it 0-5 with specific feedback on what you got right and which concepts you missed. Falls back to keyword-overlap scoring offline.
 
 You can adjust the scoring weight in real time, browse the underlying evidence base, or upload your own grade CSV to retrain on your data.
 
@@ -80,13 +86,33 @@ The app opens at `http://localhost:8501`.
 
 ---
 
-## Deploy to Streamlit Community Cloud (free)
+## Deploy
+
+### Streamlit Community Cloud (free, fastest)
 
 1. Push this repo to GitHub
 2. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub
 3. **New app** → pick this repo → main file `app.py` → Deploy
 
 Streamlit Cloud reads `requirements.txt` and `.streamlit/config.toml` automatically.
+To enable AI features, add `GEMINI_API_KEY` to the app's **Secrets** in the Streamlit Cloud settings — same TOML format as `.streamlit/secrets.example.toml`.
+
+### Docker
+
+A production-ready `Dockerfile` is included:
+
+```bash
+docker build -t learning-recommender .
+docker run --rm -p 8501:8501 \
+    -e GEMINI_API_KEY=your_key_here \
+    learning-recommender
+```
+
+The image is single-stage Python 3.12-slim with a built-in healthcheck against Streamlit's `/_stcore/health` endpoint. `.dockerignore` keeps caches, notebooks, and secrets out of the build context.
+
+### Continuous Integration
+
+`.github/workflows/tests.yml` runs the full pytest suite against Python 3.11 and 3.12 on every push and pull request to `main`. The CI status badge at the top of this README tracks the latest run.
 
 ---
 
@@ -94,20 +120,25 @@ Streamlit Cloud reads `requirements.txt` and `.streamlit/config.toml` automatica
 
 ```
 Learning-Technique-Recommendations/
-├── app.py                              Streamlit UI
+├── app.py                                   Streamlit UI
+├── Dockerfile                               container image (Python 3.12-slim)
+├── .dockerignore
 ├── requirements.txt
+├── .github/workflows/tests.yml              CI: pytest on Python 3.11 + 3.12
 ├── .streamlit/
-│   ├── config.toml                     theme + server settings
-│   └── secrets.example.toml            template for GEMINI_API_KEY
+│   ├── config.toml                          theme + server settings
+│   └── secrets.example.toml                 template for GEMINI_API_KEY
 ├── src/
-│   ├── research.py                     peer-reviewed evidence base (citations + effect sizes)
-│   ├── classifier.py                   SyllabusClassifier (TF-IDF + cosine similarity)
-│   ├── recommender.py                  LearningTechniqueRecommender (per-course-type ranking)
-│   ├── pipeline.py                     LearningStyleSystem (end-to-end orchestration)
-│   ├── parsing.py                      PDF / TXT extraction with Gemini vision fallback
-│   ├── plan.py                         StudyPlan + per-technique session templates
-│   ├── quiz.py                         Per-technique AI quiz generation
-│   └── data.py                         default scores (derived from research.py), examples
+│   ├── research.py                          peer-reviewed evidence base (citations + effect sizes)
+│   ├── classifier.py                        SyllabusClassifier (TF-IDF + cosine similarity)
+│   ├── recommender.py                       LearningTechniqueRecommender (per-course-type ranking)
+│   ├── pipeline.py                          LearningStyleSystem (end-to-end orchestration)
+│   ├── parsing.py                           PDF / TXT extraction with Gemini vision fallback
+│   ├── plan.py                              StudyPlan + per-technique session templates
+│   ├── quiz.py                              Per-technique AI quiz generation
+│   ├── grade.py                             AI semantic grading of free-text answers
+│   └── data.py                              default scores (derived from research.py), examples
+├── tests/                                   19 unit + integration tests (pytest)
 └── Learning_Recommendation_Pipeline.ipynb   notebook walkthrough
 ```
 
@@ -132,6 +163,7 @@ The **Study Plan** tab turns a recommended technique into a concrete schedule:
 - **Topic extraction** — Gemini 2.5 Flash reads the syllabus and pulls out the main study topics. Falls back to regex-based heuristic parsing if no API key is configured, so the app works fully offline.
 - **Session templates** — each top-supported technique has its own deterministic template (Worked Example Analysis, Feynman, Conceptual Mapping, Case Study Analysis, Immersive Practice, Incremental Skill Building, Project-Based Learning, Active Recall, Spaced Repetition). Templates produce a session-by-session schedule with concrete sub-steps.
 - **Per-session AI quizzes** — click "Generate practice quiz" on any session to get 5 questions tuned to that session's technique. Each question reveals the model answer + an explanation on click. Generated by Gemini 2.5 Flash with a structured JSON schema. Falls back to a template prompt if no API key.
+- **Semantic answer grading** — type your answer to any quiz question, click "Check my answer", and Gemini grades you 0-5 using a five-level rubric with 2-3 sentences of constructive feedback and up to three concept-level "missing points" to review. Offline fallback uses keyword overlap so the loop still works without an API key.
 - **Spaced review** — when the primary technique isn't already a review technique, short weekly Spaced Repetition consolidation sessions are added at the end of each week.
 - **Exports** — download as Markdown, ICS (drop into Google Calendar / Apple Calendar / Outlook), or raw JSON.
 

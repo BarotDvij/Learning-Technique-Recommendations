@@ -7,6 +7,7 @@ from src.data import (
     REQUIRED_COLUMNS,
     compute_technique_grades,
 )
+from src.grade import Grade, grade_answer
 from src.parsing import ExtractedSyllabus, extract_syllabus
 from src.pipeline import LearningStyleSystem
 from src.plan import StudyPlan, StudySession, generate_study_plan
@@ -39,4 +40,6 @@ __all__ = [
     "Quiz",
     "QuizQuestion",
     "generate_quiz",
+    "Grade",
+    "grade_answer",
 ]
