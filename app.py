@@ -21,6 +21,7 @@ from src import (
     EXAMPLE_SYLLABI,
     Grade,
     LearningStyleSystem,
+    PracticeLog,
     REQUIRED_COLUMNS,
     RESEARCH,
     Quiz,
@@ -410,6 +411,7 @@ def render_quiz(quiz: Quiz, key_prefix: str = "") -> None:
         st.caption(note)
 
     grades: dict = st.session_state.setdefault("grades", {})
+    practice_log: PracticeLog = st.session_state.setdefault("practice_log", PracticeLog())
     api_key = _get_gemini_key()
 
     for i, q in enumerate(quiz.questions, start=1):
@@ -452,6 +454,13 @@ def render_quiz(quiz: Quiz, key_prefix: str = "") -> None:
                             api_key=api_key,
                         )
                     grades[q_key] = grade
+                    practice_log.record_grade(
+                        session_id=key_prefix or q_key,
+                        topic=quiz.topic,
+                        technique=quiz.technique,
+                        question=q.question,
+                        grade=grade,
+                    )
             with action_cols[1]:
                 if q_key in grades and st.button(
                     "Clear grade",
@@ -732,6 +741,196 @@ def render_study_plan_tab() -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Progress tab
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _render_weak_topic_cards(weak: list[dict]) -> None:
+    """Tech-card grid for weak topics with attempts + avg score + suggestion."""
+    for t in weak:
+        action = (
+            "Re-study fundamentals and retry"
+            if t["avg_score"] <= 2.0
+            else "Revisit key concepts and try again"
+            if t["avg_score"] <= 3.0
+            else "Short refresh — close to mastery"
+        )
+        badge_cls = "badge badge-mixed" if t["avg_score"] <= 2.0 else "badge badge-moderate"
+        techniques_pills = " ".join(
+            f'<span class="pill">{tech}</span>' for tech in t["techniques"]
+        )
+        st.markdown(
+            f"""
+            <div class="tech-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <div class="tech-rank">Weak topic</div>
+                        <div class="tech-name">{t['topic']}</div>
+                        <div class="tech-meta">
+                            <span class="{badge_cls}">avg {t['avg_score']:.2f}/5</span>
+                            <span class="pill">{t['attempts']} attempts</span>
+                            <span class="pill">last score {t['last_score']}/5</span>
+                            {techniques_pills}
+                        </div>
+                        <div class="tech-summary">{action}.</div>
+                    </div>
+                    <div style="text-align: right; padding-left: 1.5rem;">
+                        <div class="tech-score">{t['avg_score']:.1f}</div>
+                        <div class="tech-meta">avg score</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def _render_recommendation_cards(recs: list[dict]) -> None:
+    """Top-N 'study this next' cards from PracticeLog.recommended_review()."""
+    for i, r in enumerate(recs, start=1):
+        st.markdown(
+            f"""
+            <div class="tech-card tech-card-top">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <div class="tech-rank">Suggestion {i}</div>
+                        <div class="tech-name">{r['topic']}</div>
+                        <div class="tech-meta">
+                            <span class="badge badge-moderate-high">{r['technique'] or 'review'}</span>
+                            <span class="pill">avg {r['avg_score']:.2f}/5</span>
+                            <span class="pill">last {r['last_score']}/5</span>
+                            <span class="pill">{r['attempts']} attempts</span>
+                        </div>
+                        <div class="tech-summary">{r['reason']}</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def render_progress_tab() -> None:
+    """Personal practice analytics derived from graded quiz attempts."""
+    practice_log: PracticeLog = st.session_state.setdefault("practice_log", PracticeLog())
+    stats = practice_log.summary_stats()
+
+    if stats["total_attempted"] == 0:
+        st.info(
+            "**No practice data yet.** This tab tracks every quiz answer you grade — "
+            "running accuracy, average score, weak topics, and what to review next. "
+            "Open the **Study Plan** tab, generate a quiz for any session, write an "
+            "answer, and click **Check my answer**. Your stats will appear here.",
+            icon=":material/insights:",
+        )
+        return
+
+    # ── Summary metrics ─────────────────────────────────────────────────
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Questions attempted", stats["total_attempted"])
+    m2.metric("Accuracy", f"{stats['accuracy_pct']:.1f}%")
+    m3.metric("Average score", f"{stats['avg_score']:.2f} / 5")
+    m4.metric("Topics seen", stats["topics_seen"])
+
+    st.divider()
+
+    # ── Score trend ─────────────────────────────────────────────────────
+    st.markdown("#### Score trend")
+    trend = practice_log.score_trend(window=5)
+    if len(trend) >= 1:
+        trend_df = pd.DataFrame(trend, columns=["Attempt", "Running average (last 5)"])
+        fig = px.line(
+            trend_df,
+            x="Attempt",
+            y="Running average (last 5)",
+            markers=True,
+            range_y=[0, 5.2],
+        )
+        fig.update_traces(line=dict(color="#4F46E5", width=3), marker=dict(size=8))
+        fig.update_layout(
+            height=320,
+            margin=dict(l=10, r=20, t=10, b=10),
+            plot_bgcolor="white",
+        )
+        fig.update_xaxes(showgrid=True, gridcolor="#F1F5F9", dtick=1)
+        fig.update_yaxes(showgrid=True, gridcolor="#F1F5F9")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.caption("Score trend appears after your first graded answer.")
+
+    # ── Per-technique averages ──────────────────────────────────────────
+    st.markdown("#### Average score by technique")
+    breakdown = practice_log.technique_breakdown()
+    if breakdown:
+        bdf = pd.DataFrame(breakdown).sort_values("avg_score")
+        bar_fig = px.bar(
+            bdf,
+            x="avg_score",
+            y="technique",
+            orientation="h",
+            text=bdf["avg_score"].apply(lambda v: f"{v:.2f}"),
+            hover_data={"attempts": True, "accuracy_pct": True},
+            color="avg_score",
+            color_continuous_scale=[(0, "#FCA5A5"), (0.5, "#FCD34D"), (1, "#34D399")],
+            range_color=[0, 5],
+        )
+        bar_fig.update_traces(textposition="outside", cliponaxis=False)
+        bar_fig.update_layout(
+            height=max(220, 60 * len(bdf) + 80),
+            margin=dict(l=10, r=40, t=10, b=10),
+            xaxis_title="Avg score (0-5)",
+            yaxis_title=None,
+            coloraxis_showscale=False,
+            plot_bgcolor="white",
+        )
+        bar_fig.update_xaxes(range=[0, 5.5], showgrid=True, gridcolor="#F1F5F9")
+        bar_fig.update_yaxes(showgrid=False)
+        st.plotly_chart(bar_fig, use_container_width=True)
+    else:
+        st.caption("Practice with a quiz to populate this chart.")
+
+    st.divider()
+
+    # ── Weak topics ─────────────────────────────────────────────────────
+    st.markdown("#### Weak topics")
+    weak = practice_log.weak_topics(min_attempts=2, max_avg=3.0)
+    if weak:
+        _render_weak_topic_cards(weak)
+    else:
+        st.caption(
+            "No topics flagged as weak yet — that's either great work, or you need a "
+            "couple more attempts before there's enough signal."
+        )
+
+    # ── Recommended review ──────────────────────────────────────────────
+    st.markdown("#### Recommended next study session")
+    recs = practice_log.recommended_review(top_k=3)
+    if recs:
+        _render_recommendation_cards(recs)
+    else:
+        st.caption("Once you've graded a few answers, suggestions will appear here.")
+
+    st.divider()
+
+    # ── Export ──────────────────────────────────────────────────────────
+    st.markdown("#### Export")
+    dl_cols = st.columns([1, 1, 4])
+    with dl_cols[0]:
+        st.download_button(
+            "Download practice log (JSON)",
+            data=json.dumps(practice_log.to_dict(), indent=2),
+            file_name="practice_log.json",
+            mime="application/json",
+            use_container_width=True,
+            key="dl-practice-log",
+        )
+    with dl_cols[1]:
+        if st.button("Clear log", use_container_width=True, key="clear-practice-log"):
+            practice_log.clear()
+            st.rerun()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -747,8 +946,8 @@ def main() -> None:
 
     default_text = render_sidebar()
 
-    tab_analyze, tab_plan, tab_explore, tab_about = st.tabs(
-        ["Analyze", "Study Plan", "Explore Data", "How It Works"]
+    tab_analyze, tab_plan, tab_progress, tab_explore, tab_about = st.tabs(
+        ["Analyze", "Study Plan", "Progress", "Explore Data", "How It Works"]
     )
 
     # ── Analyze tab ───────────────────────────────────────────────────────────
@@ -847,6 +1046,10 @@ def main() -> None:
     # ── Study Plan tab ────────────────────────────────────────────────────────
     with tab_plan:
         render_study_plan_tab()
+
+    # ── Progress tab ──────────────────────────────────────────────────────────
+    with tab_progress:
+        render_progress_tab()
 
     # ── Explore Data tab ──────────────────────────────────────────────────────
     with tab_explore:
