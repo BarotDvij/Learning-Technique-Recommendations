@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from src.grade import Grade
@@ -103,7 +103,7 @@ class PracticeLog:
             question=question,
             score=int(grade.score),
             is_correct=bool(grade.is_correct),
-            timestamp=timestamp or datetime.utcnow().isoformat(),
+            timestamp=timestamp or datetime.now(timezone.utc).isoformat(),
             grade_source=str(grade.source),
         )
         self.records.append(record)

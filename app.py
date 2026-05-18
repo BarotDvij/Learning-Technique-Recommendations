@@ -129,19 +129,22 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 @st.cache_resource
-def get_default_system() -> LearningStyleSystem:
-    """Build the default system once and reuse across reruns."""
-    return LearningStyleSystem(DEFAULT_TECHNIQUE_GRADES)
+def _get_default_grades_system():
+    """Cache the default technique grades (immutable) once per process."""
+    return DEFAULT_TECHNIQUE_GRADES
 
 
 def get_system() -> LearningStyleSystem:
-    """Get the active system — custom data if uploaded, otherwise default."""
-    grades = st.session_state.get("custom_grades")
-    if grades:
-        return LearningStyleSystem(grades, course_weight=st.session_state.get("course_weight", 0.5))
-    sys = get_default_system()
-    sys.course_weight = st.session_state.get("course_weight", 0.5)
-    return sys
+    """
+    Build a LearningStyleSystem for the current session.
+
+    Always constructs a fresh instance so the per-session course_weight
+    never mutates a shared cached singleton (which would be a race condition
+    in multi-user deployments).
+    """
+    grades = st.session_state.get("custom_grades") or _get_default_grades_system()
+    weight = st.session_state.get("course_weight", 0.5)
+    return LearningStyleSystem(grades, course_weight=weight)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -368,11 +371,30 @@ def render_data_explorer(system: LearningStyleSystem) -> None:
 
 
 def _get_gemini_key() -> str | None:
-    """Pull a Gemini API key from Streamlit secrets if available."""
+    """
+    Resolve a Gemini API key from the first available source:
+
+    1. Streamlit secrets  (``st.secrets["GEMINI_API_KEY"]``)
+    2. ``GEMINI_API_KEY`` environment variable
+    3. ``GOOGLE_API_KEY``  environment variable
+
+    This matches the fallback chain used inside each ``src/`` module so that
+    Docker users who pass ``-e GEMINI_API_KEY=...`` get AI features in the UI.
+    Also rejects the placeholder value from ``secrets.example.toml`` so users
+    who forget to replace it don't silently get 401 errors.
+    """
+    import os
+    key: str | None = None
     try:
-        return st.secrets.get("GEMINI_API_KEY")  # type: ignore[attr-defined]
+        key = st.secrets.get("GEMINI_API_KEY")  # type: ignore[attr-defined]
     except Exception:
+        pass
+    if not key:
+        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    # Reject the literal placeholder from secrets.example.toml
+    if key and ("your-" in key.lower() or "-here" in key.lower()):
         return None
+    return key or None
 
 
 def render_plan_overview(plan: StudyPlan) -> None:
@@ -979,15 +1001,18 @@ def main() -> None:
                         st.session_state.get("uploaded_filename")
                         != uploaded_syllabus.name
                     ):
-                        with st.spinner(f"Extracting text from {uploaded_syllabus.name}..."):
-                            extracted = extract_syllabus(
-                                file_bytes=uploaded_syllabus.getvalue(),
-                                filename=uploaded_syllabus.name,
-                                api_key=_get_gemini_key(),
-                            )
-                        st.session_state["uploaded_filename"] = uploaded_syllabus.name
-                        st.session_state["uploaded_text"] = extracted.text
-                        st.session_state["uploaded_meta"] = extracted
+                        try:
+                            with st.spinner(f"Extracting text from {uploaded_syllabus.name}..."):
+                                extracted = extract_syllabus(
+                                    file_bytes=uploaded_syllabus.getvalue(),
+                                    filename=uploaded_syllabus.name,
+                                    api_key=_get_gemini_key(),
+                                )
+                            st.session_state["uploaded_filename"] = uploaded_syllabus.name
+                            st.session_state["uploaded_text"] = extracted.text
+                            st.session_state["uploaded_meta"] = extracted
+                        except ValueError as exc:
+                            st.error(str(exc))
 
                 if st.session_state.get("uploaded_text"):
                     meta = st.session_state.get("uploaded_meta")

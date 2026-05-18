@@ -249,7 +249,7 @@ def generate_quiz(
     context_block = ""
     if syllabus_text.strip():
         truncated = syllabus_text.strip()[:4000]
-        context_block = f"\n\nCourse context (for grounding only):\n{truncated}\n"
+        context_block = f"\n\n<course_context>\n{truncated}\n</course_context>\n"
 
     if difficulty == "balanced":
         difficulty_clause = (

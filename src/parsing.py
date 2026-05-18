@@ -59,21 +59,28 @@ class ExtractedSyllabus:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _extract_pdf_native(file_bytes: bytes) -> str:
-    """Extract text from a text-based PDF using pypdf. Returns empty string on failure."""
+def _extract_pdf_native(file_bytes: bytes) -> tuple[str, str | None]:
+    """
+    Extract text from a text-based PDF using pypdf.
+
+    Returns (text, error_hint) where error_hint is a short description of any
+    failure that occurred, or None on full success.
+    """
     if not PYPDF_AVAILABLE:
-        return ""
+        return "", "pypdf not installed"
     try:
         reader = pypdf.PdfReader(io.BytesIO(file_bytes))
         chunks = []
         for page in reader.pages:
             try:
                 chunks.append(page.extract_text() or "")
-            except Exception:
-                continue
-        return "\n\n".join(c.strip() for c in chunks if c.strip())
-    except Exception:
-        return ""
+            except Exception as exc:
+                chunks.append("")
+                # Per-page failures are common in encrypted/damaged PDFs; collect silently.
+                _ = exc
+        return "\n\n".join(c.strip() for c in chunks if c.strip()), None
+    except Exception as exc:
+        return "", f"{type(exc).__name__}: {exc}"
 
 
 def _extract_text_native(file_bytes: bytes) -> str:
@@ -103,15 +110,15 @@ def _get_genai_client(api_key: Optional[str]):
         return None
 
 
-def _extract_pdf_vision(file_bytes: bytes, api_key: Optional[str]) -> str:
+def _extract_pdf_vision(file_bytes: bytes, api_key: Optional[str]) -> tuple[str, str | None]:
     """
     Use Gemini 2.5 Flash multimodal to extract text from an image-based PDF.
 
-    Returns empty string if Gemini is unavailable or the call fails.
+    Returns (text, error_hint) — error_hint is None on success.
     """
     client = _get_genai_client(api_key)
     if client is None:
-        return ""
+        return "", "no Gemini API key configured"
     try:
         pdf_part = genai_types.Part.from_bytes(data=file_bytes, mime_type="application/pdf")
         prompt = (
@@ -124,9 +131,9 @@ def _extract_pdf_vision(file_bytes: bytes, api_key: Optional[str]) -> str:
             model="gemini-2.5-flash",
             contents=[prompt, pdf_part],
         )
-        return (response.text or "").strip()
-    except Exception:
-        return ""
+        return (response.text or "").strip(), None
+    except Exception as exc:
+        return "", f"{type(exc).__name__}: {exc}"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -134,11 +141,15 @@ def _extract_pdf_vision(file_bytes: bytes, api_key: Optional[str]) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024  # 10 MB hard limit before any parsing
+
+
 def extract_syllabus(
     file_bytes: bytes,
     filename: str,
     api_key: Optional[str] = None,
     min_native_chars: int = 200,
+    max_bytes: int = MAX_UPLOAD_BYTES,
 ) -> ExtractedSyllabus:
     """
     Extract syllabus text from an uploaded file's bytes.
@@ -157,10 +168,19 @@ def extract_syllabus(
                     ``GOOGLE_API_KEY`` env vars. Required only for the vision path.
         min_native_chars: If native PDF extraction returns fewer characters than
                     this, the vision fallback is attempted.
+        max_bytes:  Hard size cap before any parsing is attempted. Defaults to
+                    10 MB. Raises ``ValueError`` on breach to prevent OOM.
 
     Returns:
         ExtractedSyllabus with text, source label, char count, and warnings.
     """
+    if len(file_bytes) > max_bytes:
+        raise ValueError(
+            f"File '{filename}' is {len(file_bytes) / 1024 / 1024:.1f} MB, "
+            f"which exceeds the {max_bytes // 1024 // 1024} MB limit. "
+            "Please upload a smaller file."
+        )
+
     lower = filename.lower()
     warnings: list[str] = []
 
@@ -179,7 +199,10 @@ def extract_syllabus(
         if not PYPDF_AVAILABLE:
             warnings.append("pypdf not installed — cannot parse PDFs natively.")
 
-        native_text = _extract_pdf_native(file_bytes)
+        native_text, native_err = _extract_pdf_native(file_bytes)
+        if native_err:
+            warnings.append(f"Native PDF parse error: {native_err}.")
+
         if len(native_text) >= min_native_chars:
             return ExtractedSyllabus(
                 text=native_text,
@@ -197,7 +220,9 @@ def extract_syllabus(
         else:
             warnings.append("No native text — likely a scanned PDF.")
 
-        vision_text = _extract_pdf_vision(file_bytes, api_key=api_key)
+        vision_text, vision_err = _extract_pdf_vision(file_bytes, api_key=api_key)
+        if vision_err:
+            warnings.append(f"Vision fallback error: {vision_err}.")
         if vision_text:
             return ExtractedSyllabus(
                 text=vision_text,
@@ -209,8 +234,7 @@ def extract_syllabus(
             )
 
         warnings.append(
-            "Vision fallback unavailable (no API key or call failed). "
-            "Returning whatever native text was extracted."
+            "Vision fallback produced no text. Returning whatever native text was extracted."
         )
         return ExtractedSyllabus(
             text=native_text,

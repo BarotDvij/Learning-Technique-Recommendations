@@ -87,12 +87,13 @@ def _grade_with_llm(
     client,
 ) -> Optional[Grade]:
     """Single Gemini call; returns None on any failure so the caller can fall back."""
+    safe_user = user_answer.strip()[:2000]  # cap; prevents prompt-stuffing
     prompt = (
         "You are a precise, fair tutor grading a student's free-text answer.\n\n"
         f"Question: {question}\n"
         f"Model answer: {expected_answer}\n"
         f"Study technique driving the question: {technique}\n"
-        f"Student's answer: {user_answer}\n\n"
+        f"<student_answer>\n{safe_user}\n</student_answer>\n\n"
         "Grade the student on a 0-5 rubric:\n"
         "  0 = blank / off-topic / no credit\n"
         "  1 = wrong but shows minimal engagement\n"
@@ -132,8 +133,10 @@ def _grade_with_llm(
             missing_points=missing,
             source="llm",
         )
-    except Exception:
-        return None
+    except Exception as exc:
+        # Propagate the error type so callers can log/surface it.
+        # grade_answer() will note it in the returned Grade.
+        raise RuntimeError(f"Gemini grading failed: {type(exc).__name__}: {exc}") from exc
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -260,14 +263,22 @@ def grade_answer(
     """
     client = _get_client(api_key)
     if client is not None:
-        llm_grade = _grade_with_llm(
-            question=question,
-            expected_answer=expected_answer,
-            user_answer=user_answer,
-            technique=technique,
-            client=client,
-        )
-        if llm_grade is not None:
-            return llm_grade
+        try:
+            llm_grade = _grade_with_llm(
+                question=question,
+                expected_answer=expected_answer,
+                user_answer=user_answer,
+                technique=technique,
+                client=client,
+            )
+            if llm_grade is not None:
+                return llm_grade
+        except RuntimeError as exc:
+            fallback = _grade_with_fallback(expected_answer, user_answer)
+            fallback.feedback = (
+                f"[AI grading failed — {exc}. Showing offline keyword score.] "
+                + fallback.feedback
+            )
+            return fallback
 
     return _grade_with_fallback(expected_answer, user_answer)

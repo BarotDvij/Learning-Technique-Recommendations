@@ -40,6 +40,12 @@ class SyllabusClassifier:
             "practical exercises build systems project deliverables portfolios "
             "demonstrations"
         ),
+        "Seminar / Discussion-Based Learning": (
+            "seminar discussion debate Socratic dialogue roundtable reading group analysis "
+            "close reading humanities social sciences political science philosophy "
+            "weekly readings response papers participation discussion board collaborative "
+            "conversation argument critique peer review"
+        ),
     }
 
     def __init__(self):

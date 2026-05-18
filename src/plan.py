@@ -184,8 +184,12 @@ def _get_genai_client(api_key: Optional[str]):
         return None
 
 
+_MAX_SYLLABUS_CHARS = 4000  # Match quiz.py; prevents prompt-stuffing and runaway costs
+
+
 def _extract_topics_llm(client, syllabus_text: str, n_topics: int) -> List[str]:
     """Use Gemini Flash to extract clean topic strings from raw syllabus text."""
+    safe_syllabus = syllabus_text.strip()[:_MAX_SYLLABUS_CHARS]
     prompt = (
         f"You are a study planner. Read the course syllabus below and extract "
         f"the {n_topics} most important study topics a student must master.\n\n"
@@ -194,7 +198,7 @@ def _extract_topics_llm(client, syllabus_text: str, n_topics: int) -> List[str]:
         f"  - specific and actionable\n"
         f"  - a discrete unit of content (not too broad)\n\n"
         f"Return ONLY a JSON array of strings. No numbering, no commentary.\n\n"
-        f"Syllabus:\n{syllabus_text}"
+        f"<syllabus>\n{safe_syllabus}\n</syllabus>"
     )
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -255,8 +259,10 @@ def extract_topics(
             topics = _extract_topics_llm(client, syllabus_text, n_topics)
             if topics:
                 return topics, "llm"
-        except Exception:
-            pass
+        except Exception as exc:
+            # Log the failure so callers can surface it; fall through to heuristic.
+            import sys
+            print(f"[plan] LLM topic extraction failed ({type(exc).__name__}: {exc}); using fallback.", file=sys.stderr)
     return _extract_topics_fallback(syllabus_text, n_topics), "fallback"
 
 
