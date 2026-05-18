@@ -103,12 +103,14 @@ def test_record_grade_appends_record_and_updates_totals() -> None:
 
 
 def test_weak_topics_excludes_topics_with_too_few_attempts() -> None:
-    log = _log_with_records([
-        ("Stoichiometry", "Worked Example Analysis", 1),  # only 1 attempt → ignored
-        ("Kinematics", "Worked Example Analysis", 1),
-        ("Kinematics", "Worked Example Analysis", 2),
-        ("Kinematics", "Worked Example Analysis", 2),
-    ])
+    log = _log_with_records(
+        [
+            ("Stoichiometry", "Worked Example Analysis", 1),  # only 1 attempt → ignored
+            ("Kinematics", "Worked Example Analysis", 1),
+            ("Kinematics", "Worked Example Analysis", 2),
+            ("Kinematics", "Worked Example Analysis", 2),
+        ]
+    )
     weak = log.weak_topics(min_attempts=2, max_avg=3.0)
 
     topics = {w["topic"] for w in weak}
@@ -120,13 +122,15 @@ def test_weak_topics_excludes_topics_with_too_few_attempts() -> None:
 
 
 def test_weak_topics_excludes_topics_with_high_avg_score() -> None:
-    log = _log_with_records([
-        ("Mastered", "Active Recall", 5),
-        ("Mastered", "Active Recall", 5),
-        ("Mastered", "Active Recall", 4),
-        ("Struggling", "Active Recall", 1),
-        ("Struggling", "Active Recall", 2),
-    ])
+    log = _log_with_records(
+        [
+            ("Mastered", "Active Recall", 5),
+            ("Mastered", "Active Recall", 5),
+            ("Mastered", "Active Recall", 4),
+            ("Struggling", "Active Recall", 1),
+            ("Struggling", "Active Recall", 2),
+        ]
+    )
     weak = log.weak_topics(min_attempts=2, max_avg=3.0)
     topics = {w["topic"] for w in weak}
 
@@ -137,11 +141,13 @@ def test_weak_topics_excludes_topics_with_high_avg_score() -> None:
 
 
 def test_score_trend_returns_expected_shape() -> None:
-    log = _log_with_records([
-        ("T", "Active Recall", 2),
-        ("T", "Active Recall", 4),
-        ("T", "Active Recall", 5),
-    ])
+    log = _log_with_records(
+        [
+            ("T", "Active Recall", 2),
+            ("T", "Active Recall", 4),
+            ("T", "Active Recall", 5),
+        ]
+    )
     trend = log.score_trend(window=2)
 
     assert len(trend) == 3
@@ -157,11 +163,13 @@ def test_score_trend_returns_expected_shape() -> None:
 
 
 def test_to_dict_from_dict_round_trips_a_populated_log() -> None:
-    log = _log_with_records([
-        ("Limits", "Active Recall", 3),
-        ("Limits", "Active Recall", 4),
-        ("Derivatives", "Feynman Technique", 5),
-    ])
+    log = _log_with_records(
+        [
+            ("Limits", "Active Recall", 3),
+            ("Limits", "Active Recall", 4),
+            ("Derivatives", "Feynman Technique", 5),
+        ]
+    )
     data = log.to_dict()
 
     assert data["version"] == 1
@@ -176,14 +184,16 @@ def test_to_dict_from_dict_round_trips_a_populated_log() -> None:
 
 
 def test_recommended_review_prefers_weakest_topics() -> None:
-    log = _log_with_records([
-        ("Strong", "Active Recall", 5),
-        ("Strong", "Active Recall", 5),
-        ("Medium", "Feynman Technique", 3),
-        ("Medium", "Feynman Technique", 3),
-        ("Weak", "Conceptual Mapping", 1),
-        ("Weak", "Conceptual Mapping", 2),
-    ])
+    log = _log_with_records(
+        [
+            ("Strong", "Active Recall", 5),
+            ("Strong", "Active Recall", 5),
+            ("Medium", "Feynman Technique", 3),
+            ("Medium", "Feynman Technique", 3),
+            ("Weak", "Conceptual Mapping", 1),
+            ("Weak", "Conceptual Mapping", 2),
+        ]
+    )
     recs = log.recommended_review(top_k=2)
 
     assert len(recs) == 2

@@ -45,10 +45,7 @@ class LearningStyleSystem:
             for item in self.recommender.get_all_techniques_ranked(course_type):
                 technique = item["technique"]
                 evidence_score = item["expected_grade"]
-                combined = (
-                    self.course_weight * match_score
-                    + tech_weight * (evidence_score / 100)
-                )
+                combined = self.course_weight * match_score + tech_weight * (evidence_score / 100)
 
                 evidence = get_evidence(technique)
                 research = (
@@ -66,15 +63,17 @@ class LearningStyleSystem:
                     else None
                 )
 
-                results.append({
-                    "technique": technique,
-                    "expected_grade": evidence_score,
-                    "evidence_score": evidence_score,
-                    "course_type": course_type,
-                    "course_match": round(match_score * 100, 1),
-                    "combined_score": round(combined * 100, 1),
-                    "research": research,
-                })
+                results.append(
+                    {
+                        "technique": technique,
+                        "expected_grade": evidence_score,
+                        "evidence_score": evidence_score,
+                        "course_type": course_type,
+                        "course_match": round(match_score * 100, 1),
+                        "combined_score": round(combined * 100, 1),
+                        "research": research,
+                    }
+                )
 
         results.sort(key=lambda x: x["combined_score"], reverse=True)
         return {

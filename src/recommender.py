@@ -31,9 +31,7 @@ class LearningTechniqueRecommender:
             "expected_grade": self.technique_grades[course_type][technique],
         }
 
-    def get_all_techniques_ranked(
-        self, course_type: str
-    ) -> List[Dict[str, Union[str, float]]]:
+    def get_all_techniques_ranked(self, course_type: str) -> List[Dict[str, Union[str, float]]]:
         """Return all techniques for a course type sorted best-first."""
         self._check(course_type)
         return [
@@ -67,6 +65,5 @@ class LearningTechniqueRecommender:
     def _check(self, course_type: str) -> None:
         if course_type not in self.technique_grades:
             raise ValueError(
-                f"Unknown course type '{course_type}'. "
-                f"Available: {self.available_course_types}"
+                f"Unknown course type '{course_type}'. Available: {self.available_course_types}"
             )

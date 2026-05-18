@@ -164,14 +164,16 @@ class PracticeLog:
                 buckets[r.technique].append(r)
         out: List[dict] = []
         for technique, items in buckets.items():
-            out.append({
-                "technique": technique,
-                "attempts": len(items),
-                "avg_score": round(sum(r.score for r in items) / len(items), 2),
-                "accuracy_pct": round(
-                    100 * sum(1 for r in items if r.is_correct) / len(items), 1
-                ),
-            })
+            out.append(
+                {
+                    "technique": technique,
+                    "attempts": len(items),
+                    "avg_score": round(sum(r.score for r in items) / len(items), 2),
+                    "accuracy_pct": round(
+                        100 * sum(1 for r in items if r.is_correct) / len(items), 1
+                    ),
+                }
+            )
         out.sort(key=lambda d: d["avg_score"])
         return out
 
@@ -186,18 +188,20 @@ class PracticeLog:
             # Most-recent-first technique used while studying this topic.
             techniques = list({r.technique for r in items if r.technique})
             last = items[-1]
-            out.append({
-                "topic": topic,
-                "attempts": len(items),
-                "avg_score": round(sum(r.score for r in items) / len(items), 2),
-                "accuracy_pct": round(
-                    100 * sum(1 for r in items if r.is_correct) / len(items), 1
-                ),
-                "last_score": last.score,
-                "last_timestamp": last.timestamp,
-                "last_technique": last.technique,
-                "techniques": sorted(techniques),
-            })
+            out.append(
+                {
+                    "topic": topic,
+                    "attempts": len(items),
+                    "avg_score": round(sum(r.score for r in items) / len(items), 2),
+                    "accuracy_pct": round(
+                        100 * sum(1 for r in items if r.is_correct) / len(items), 1
+                    ),
+                    "last_score": last.score,
+                    "last_timestamp": last.timestamp,
+                    "last_technique": last.technique,
+                    "techniques": sorted(techniques),
+                }
+            )
         return out
 
     def weak_topics(
@@ -214,7 +218,8 @@ class PracticeLog:
         count (more attempts → higher confidence the gap is real).
         """
         weak = [
-            t for t in self.topic_breakdown()
+            t
+            for t in self.topic_breakdown()
             if t["attempts"] >= min_attempts and t["avg_score"] <= max_avg
         ]
         weak.sort(key=lambda t: (t["avg_score"], -t["attempts"]))
@@ -243,7 +248,8 @@ class PracticeLog:
         if len(candidates) < top_k:
             # Pad with "below mastery" (avg_score < 4) topics not already chosen.
             extras = [
-                t for t in self.topic_breakdown()
+                t
+                for t in self.topic_breakdown()
                 if t["avg_score"] < 4.0 and t["topic"] not in used_topics
             ]
             extras.sort(key=lambda t: t["avg_score"])
@@ -258,15 +264,18 @@ class PracticeLog:
                 reason = "Partial understanding — revisit the key concepts and try again."
             else:
                 reason = "Just below mastery — a short refresh should push this over the line."
-            suggestions.append({
-                "topic": t["topic"],
-                "technique": t["last_technique"] or (t["techniques"][0] if t["techniques"] else ""),
-                "reason": reason,
-                "last_score": t["last_score"],
-                "avg_score": t["avg_score"],
-                "attempts": t["attempts"],
-                "recency_rank": recency(t["topic"]),
-            })
+            suggestions.append(
+                {
+                    "topic": t["topic"],
+                    "technique": t["last_technique"]
+                    or (t["techniques"][0] if t["techniques"] else ""),
+                    "reason": reason,
+                    "last_score": t["last_score"],
+                    "avg_score": t["avg_score"],
+                    "attempts": t["attempts"],
+                    "recency_rank": recency(t["topic"]),
+                }
+            )
 
         suggestions.sort(key=lambda s: (s["avg_score"], -s["recency_rank"]))
         return suggestions[:top_k]

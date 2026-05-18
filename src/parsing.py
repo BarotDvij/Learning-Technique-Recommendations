@@ -19,6 +19,7 @@ from typing import Optional, Union
 
 try:
     import pypdf  # type: ignore
+
     PYPDF_AVAILABLE = True
 except ImportError:
     PYPDF_AVAILABLE = False
@@ -26,6 +27,7 @@ except ImportError:
 try:
     from google import genai  # type: ignore
     from google.genai import types as genai_types  # type: ignore
+
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -92,11 +94,7 @@ def _extract_text_native(file_bytes: bytes) -> str:
 def _get_genai_client(api_key: Optional[str]):
     if not GENAI_AVAILABLE:
         return None
-    key = (
-        api_key
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-    )
+    key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         return None
     try:
@@ -194,8 +192,7 @@ def extract_syllabus(
 
         if len(native_text) > 0:
             warnings.append(
-                f"Only {len(native_text)} chars extracted natively — "
-                f"attempting vision fallback."
+                f"Only {len(native_text)} chars extracted natively — attempting vision fallback."
             )
         else:
             warnings.append("No native text — likely a scanned PDF.")
@@ -226,7 +223,7 @@ def extract_syllabus(
 
     # Unknown file type — try as text
     text = _extract_text_native(file_bytes)
-    warnings.append(f"Unknown file extension; treated as plain text.")
+    warnings.append("Unknown file extension; treated as plain text.")
     return ExtractedSyllabus(
         text=text.strip(),
         source="unknown",

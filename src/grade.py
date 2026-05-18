@@ -23,6 +23,7 @@ from typing import List, Optional
 try:
     from google import genai  # type: ignore
     from google.genai import types as genai_types  # type: ignore
+
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -69,11 +70,7 @@ _GRADE_SCHEMA = {
 def _get_client(api_key: Optional[str]):
     if not GENAI_AVAILABLE:
         return None
-    key = (
-        api_key
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-    )
+    key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         return None
     try:
@@ -125,11 +122,7 @@ def _grade_with_llm(
         score = int(data.get("score", 0))
         score = max(0, min(5, score))
         feedback = str(data.get("feedback", "")).strip()
-        missing = [
-            str(p).strip()
-            for p in (data.get("missing_points") or [])
-            if str(p).strip()
-        ][:3]
+        missing = [str(p).strip() for p in (data.get("missing_points") or []) if str(p).strip()][:3]
         if not feedback:
             return None
         return Grade(

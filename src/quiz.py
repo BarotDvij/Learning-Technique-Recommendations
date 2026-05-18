@@ -29,6 +29,7 @@ from typing import Dict, List, Optional
 try:
     from google import genai  # type: ignore
     from google.genai import types as genai_types  # type: ignore
+
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -158,11 +159,7 @@ DEFAULT_INSTRUCTION = (
 def _get_genai_client(api_key: Optional[str]):
     if not GENAI_AVAILABLE:
         return None
-    key = (
-        api_key
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-    )
+    key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         return None
     try:

@@ -25,6 +25,7 @@ from typing import Callable, Dict, List, Optional
 try:
     from google import genai  # type: ignore
     from google.genai import types as genai_types  # type: ignore
+
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -90,13 +91,15 @@ class StudyPlan:
         ]
         if self.review_technique:
             lines.append(f"**Review technique:** {self.review_technique}  ")
-        lines.extend([
-            f"**Duration:** {self.weeks} weeks · {self.hours_per_week:g} hrs/week  ",
-            f"**Total sessions:** {self.total_sessions} "
-            f"({self.total_minutes // 60}h {self.total_minutes % 60}m total)",
-            "",
-            "## Topics covered",
-        ])
+        lines.extend(
+            [
+                f"**Duration:** {self.weeks} weeks · {self.hours_per_week:g} hrs/week  ",
+                f"**Total sessions:** {self.total_sessions} "
+                f"({self.total_minutes // 60}h {self.total_minutes % 60}m total)",
+                "",
+                "## Topics covered",
+            ]
+        )
         for t in self.topics:
             lines.append(f"- {t}")
         lines.append("")
@@ -115,9 +118,7 @@ class StudyPlan:
             lines.append("")
             for s in week_sessions:
                 tag = " *(review)*" if s.is_review else ""
-                lines.append(
-                    f"### Session {s.session_in_week} — {s.topic}{tag}"
-                )
+                lines.append(f"### Session {s.session_in_week} — {s.topic}{tag}")
                 lines.append(f"*{s.technique} · {s.duration_minutes} min*")
                 lines.append("")
                 for a in s.actions:
@@ -133,6 +134,7 @@ class StudyPlan:
         order they appear in the plan. ``session_hour`` is the local hour each
         session starts (24h clock).
         """
+
         def fmt(dt: datetime) -> str:
             return dt.strftime("%Y%m%dT%H%M%S")
 
@@ -147,16 +149,18 @@ class StudyPlan:
             start = cursor
             end = start + timedelta(minutes=s.duration_minutes)
             description = "\\n".join(s.actions).replace(",", "\\,")
-            lines.extend([
-                "BEGIN:VEVENT",
-                f"UID:{uuid.uuid4()}@learning-technique-recommender",
-                f"DTSTAMP:{fmt(datetime.utcnow())}Z",
-                f"DTSTART:{fmt(start)}",
-                f"DTEND:{fmt(end)}",
-                f"SUMMARY:{s.topic} ({s.technique})",
-                f"DESCRIPTION:{description}",
-                "END:VEVENT",
-            ])
+            lines.extend(
+                [
+                    "BEGIN:VEVENT",
+                    f"UID:{uuid.uuid4()}@learning-technique-recommender",
+                    f"DTSTAMP:{fmt(datetime.utcnow())}Z",
+                    f"DTSTART:{fmt(start)}",
+                    f"DTEND:{fmt(end)}",
+                    f"SUMMARY:{s.topic} ({s.technique})",
+                    f"DESCRIPTION:{description}",
+                    "END:VEVENT",
+                ]
+            )
             cursor = start + timedelta(days=1)
         lines.append("END:VCALENDAR")
         return "\r\n".join(lines)
@@ -171,11 +175,7 @@ def _get_genai_client(api_key: Optional[str]):
     """Return a configured Gemini client, or None if no usable key is present."""
     if not GENAI_AVAILABLE:
         return None
-    key = (
-        api_key
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-    )
+    key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         return None
     try:
@@ -279,16 +279,21 @@ def _template_worked_examples(topics, weeks, hours_per_week):
     for w in range(1, weeks + 1):
         for s in range(1, n + 1):
             topic = topics[((w - 1) * n + (s - 1)) % len(topics)]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Worked Example Analysis", topic=topic,
-                actions=[
-                    f"Study 2 fully worked solutions involving {topic} (15 min)",
-                    "Annotate each step with the underlying principle (10 min)",
-                    "Attempt 1 similar problem from scratch without looking (15 min)",
-                    "Compare your solution to the model, note any drift (10 min)",
-                ],
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Worked Example Analysis",
+                    topic=topic,
+                    actions=[
+                        f"Study 2 fully worked solutions involving {topic} (15 min)",
+                        "Annotate each step with the underlying principle (10 min)",
+                        "Attempt 1 similar problem from scratch without looking (15 min)",
+                        "Compare your solution to the model, note any drift (10 min)",
+                    ],
+                )
+            )
     return sessions
 
 
@@ -298,17 +303,22 @@ def _template_feynman(topics, weeks, hours_per_week):
     for w in range(1, weeks + 1):
         for s in range(1, n + 1):
             topic = topics[((w - 1) * n + (s - 1)) % len(topics)]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Feynman Technique", topic=topic,
-                actions=[
-                    f"Pick 1 sub-concept from {topic} (5 min)",
-                    "Write a plain-language explanation as if teaching a 12-year-old (15 min)",
-                    "Identify every place you reached for jargon — those are gaps (5 min)",
-                    "Re-study the gaps in your source material (15 min)",
-                    "Rewrite the explanation from scratch, simpler than before (15 min)",
-                ],
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Feynman Technique",
+                    topic=topic,
+                    actions=[
+                        f"Pick 1 sub-concept from {topic} (5 min)",
+                        "Write a plain-language explanation as if teaching a 12-year-old (15 min)",
+                        "Identify every place you reached for jargon — those are gaps (5 min)",
+                        "Re-study the gaps in your source material (15 min)",
+                        "Rewrite the explanation from scratch, simpler than before (15 min)",
+                    ],
+                )
+            )
     return sessions
 
 
@@ -318,16 +328,21 @@ def _template_concept_mapping(topics, weeks, hours_per_week):
     for w in range(1, weeks + 1):
         for s in range(1, n + 1):
             topic = topics[((w - 1) * n + (s - 1)) % len(topics)]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Conceptual Mapping", topic=topic,
-                actions=[
-                    f"List every concept tied to {topic} (10 min)",
-                    "Draw a concept map: nodes for concepts, labeled arrows for relations (20 min)",
-                    "Mark every relation you can't articulate clearly — study those (10 min)",
-                    "Connect this week's map to last week's master map (5 min)",
-                ],
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Conceptual Mapping",
+                    topic=topic,
+                    actions=[
+                        f"List every concept tied to {topic} (10 min)",
+                        "Draw a concept map: nodes for concepts, labeled arrows for relations (20 min)",
+                        "Mark every relation you can't articulate clearly — study those (10 min)",
+                        "Connect this week's map to last week's master map (5 min)",
+                    ],
+                )
+            )
     return sessions
 
 
@@ -337,17 +352,22 @@ def _template_case_study(topics, weeks, hours_per_week):
     for w in range(1, weeks + 1):
         for s in range(1, n + 1):
             topic = topics[((w - 1) * n + (s - 1)) % len(topics)]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Case Study Analysis", topic=topic,
-                actions=[
-                    f"Find or re-read 1 case relevant to {topic} (15 min)",
-                    "Map the situation, stakeholders, and decision points (15 min)",
-                    "Identify which framework or principle applies (15 min)",
-                    "Write your recommendation with evidence and tradeoffs (20 min)",
-                    "Compare your reasoning to the published outcome (10 min)",
-                ],
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Case Study Analysis",
+                    topic=topic,
+                    actions=[
+                        f"Find or re-read 1 case relevant to {topic} (15 min)",
+                        "Map the situation, stakeholders, and decision points (15 min)",
+                        "Identify which framework or principle applies (15 min)",
+                        "Write your recommendation with evidence and tradeoffs (20 min)",
+                        "Compare your reasoning to the published outcome (10 min)",
+                    ],
+                )
+            )
     return sessions
 
 
@@ -357,16 +377,21 @@ def _template_immersive(topics, weeks, hours_per_week):
     for w in range(1, weeks + 1):
         for s in range(1, n + 1):
             topic = topics[((w - 1) * n + (s - 1)) % len(topics)]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Immersive Practice", topic=topic,
-                actions=[
-                    f"Listen to or read native content centered on {topic} (15 min)",
-                    "Speak or write a short response without consulting references (10 min)",
-                    "Compare to native usage and note 3 corrections (10 min)",
-                    "Re-attempt the same response with corrections internalized (5 min)",
-                ],
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Immersive Practice",
+                    topic=topic,
+                    actions=[
+                        f"Listen to or read native content centered on {topic} (15 min)",
+                        "Speak or write a short response without consulting references (10 min)",
+                        "Compare to native usage and note 3 corrections (10 min)",
+                        "Re-attempt the same response with corrections internalized (5 min)",
+                    ],
+                )
+            )
     return sessions
 
 
@@ -383,11 +408,19 @@ def _template_incremental_skill(topics, weeks, hours_per_week):
                 "Plan the smallest next step you'd take tomorrow (5 min)",
             ]
             if dur >= 60:
-                actions.insert(2, "Stretch goal: attempt one variation of the exercise unguided (15 min)")
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Incremental Skill Building", topic=topic, actions=actions,
-            ))
+                actions.insert(
+                    2, "Stretch goal: attempt one variation of the exercise unguided (15 min)"
+                )
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Incremental Skill Building",
+                    topic=topic,
+                    actions=actions,
+                )
+            )
     return sessions
 
 
@@ -403,10 +436,16 @@ def _template_project_based(topics, weeks, hours_per_week):
                 "Test it. If it doesn't run, debug now, not later (15 min)",
                 "Commit and write a one-line note on what's still incomplete (10 min)",
             ]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Project-Based Learning", topic=milestone, actions=actions,
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Project-Based Learning",
+                    topic=milestone,
+                    actions=actions,
+                )
+            )
     return sessions
 
 
@@ -416,16 +455,21 @@ def _template_active_recall(topics, weeks, hours_per_week):
     for w in range(1, weeks + 1):
         for s in range(1, n + 1):
             topic = topics[((w - 1) * n + (s - 1)) % len(topics)]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Active Recall", topic=topic,
-                actions=[
-                    f"Read through your notes on {topic} once (5 min)",
-                    "Close notes. Write down everything you remember (15 min)",
-                    "Re-open notes. Mark every gap in red (5 min)",
-                    "Re-attempt recall on just the gaps (10 min)",
-                ],
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Active Recall",
+                    topic=topic,
+                    actions=[
+                        f"Read through your notes on {topic} once (5 min)",
+                        "Close notes. Write down everything you remember (15 min)",
+                        "Re-open notes. Mark every gap in red (5 min)",
+                        "Re-attempt recall on just the gaps (10 min)",
+                    ],
+                )
+            )
     return sessions
 
 
@@ -441,16 +485,21 @@ def _template_spaced_repetition(topics, weeks, hours_per_week):
             if week > weeks:
                 break
             sin_week = ((day - 1) % 7) + 1
-            sessions.append(StudySession(
-                week=week, session_in_week=sin_week, duration_minutes=base_dur,
-                technique="Spaced Repetition", topic=topic,
-                actions=[
-                    f"Recall everything you know about {topic} from memory (10 min)",
-                    "Check against notes; mark only the missed items for next review (5 min)",
-                    f"Estimate next review interval (typically {offset}x current spacing)",
-                ],
-                is_review=True,
-            ))
+            sessions.append(
+                StudySession(
+                    week=week,
+                    session_in_week=sin_week,
+                    duration_minutes=base_dur,
+                    technique="Spaced Repetition",
+                    topic=topic,
+                    actions=[
+                        f"Recall everything you know about {topic} from memory (10 min)",
+                        "Check against notes; mark only the missed items for next review (5 min)",
+                        f"Estimate next review interval (typically {offset}x current spacing)",
+                    ],
+                    is_review=True,
+                )
+            )
     return sessions
 
 
@@ -460,15 +509,20 @@ def _template_default(topics, weeks, hours_per_week):
     for w in range(1, weeks + 1):
         for s in range(1, n + 1):
             topic = topics[((w - 1) * n + (s - 1)) % len(topics)]
-            sessions.append(StudySession(
-                week=w, session_in_week=s, duration_minutes=dur,
-                technique="Focused Study Block", topic=topic,
-                actions=[
-                    f"Preview {topic}: skim source material to build a roadmap (5 min)",
-                    "Deep work block on the hardest part — phones off, single window (30 min)",
-                    "Self-test on 2 questions you couldn't have answered an hour ago (10 min)",
-                ],
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=s,
+                    duration_minutes=dur,
+                    technique="Focused Study Block",
+                    topic=topic,
+                    actions=[
+                        f"Preview {topic}: skim source material to build a roadmap (5 min)",
+                        "Deep work block on the hardest part — phones off, single window (30 min)",
+                        "Self-test on 2 questions you couldn't have answered an hour ago (10 min)",
+                    ],
+                )
+            )
     return sessions
 
 
@@ -522,18 +576,20 @@ def generate_study_plan(
         review_tech = "Spaced Repetition"
         next_session_idx = max((s.session_in_week for s in sessions if s.week == 1), default=0) + 1
         for w in range(1, weeks + 1):
-            sessions.append(StudySession(
-                week=w,
-                session_in_week=next_session_idx,
-                duration_minutes=20,
-                technique="Spaced Repetition",
-                topic=f"Week {w} consolidation",
-                actions=[
-                    "Recall the week's topics from memory, one minute each (10 min)",
-                    "Re-test only the items you missed last time (10 min)",
-                ],
-                is_review=True,
-            ))
+            sessions.append(
+                StudySession(
+                    week=w,
+                    session_in_week=next_session_idx,
+                    duration_minutes=20,
+                    technique="Spaced Repetition",
+                    topic=f"Week {w} consolidation",
+                    actions=[
+                        "Recall the week's topics from memory, one minute each (10 min)",
+                        "Re-test only the items you missed last time (10 min)",
+                    ],
+                    is_review=True,
+                )
+            )
 
     sessions.sort(key=lambda s: (s.week, s.is_review, s.session_in_week))
 
